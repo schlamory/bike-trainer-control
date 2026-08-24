@@ -218,12 +218,12 @@ If it does enforce it, in order of effort:
 
 ### Correctness
 
-- **Fault-inject the retry path.** `bike_trainer/control.py` and
-  `web/trainer.js` both implement confirm-and-retry, and neither has ever
-  executed its retry branch — 26 clean target changes so far. Force a failure
-  (drop the confirmation wait, or write a deliberately bogus target) and verify
-  the retry actually engages. Until then the ERG-stick protection is
-  theoretical.
+- ~~**Fault-inject the retry path.**~~ **Done for the web driver.**
+  `transport/mock-gatt.js` reproduces the stick deterministically — a write
+  acknowledged on the control point with no status echo — and the retry engages
+  and recovers (`unconfirmed … retry 1/4` → `confirmed on attempt 2`). Run
+  `?mock=gatt&stick=0.4`. **`bike_trainer/control.py` is still untested**; it
+  has the same logic and deserves the same treatment.
 - **Reconnect on drop.** The PWA currently ends the ride when the trainer
   disconnects. A ride should survive a brief dropout and resume at the right
   point in the plan.
@@ -262,7 +262,7 @@ If it does enforce it, in order of effort:
 | 1 | ~~Does Bluefy deliver GATT indications?~~ | **Answered: yes**, Bluefy 3.9.3 / iOS 18.7 |
 | 2 | Does the GATT link survive an hour with the screen off? | Open, unpublished by anyone |
 | 3 | Can the ERG-stick bug be reproduced at all on firmware 31.065? | 26 changes, zero sticks. Unreproduced |
-| 4 | Does the retry logic work when it fires? | Never executed. Needs fault injection |
+| 4 | Does the retry logic work when it fires? | **Web driver: yes**, proven against a simulated stick. Python driver: still untested |
 | 5 | Does Bluefy expose a URL scheme for one-tap launch? | Open |
 
 ---
@@ -275,6 +275,10 @@ If it does enforce it, in order of effort:
   same code, and the only variable is the browser's BLE shim.
 - **2026-08-24** — Service worker is network-first, not cache-first. Cache-first
   stranded the browser on a stale build during development.
+- **2026-08-24** — Two seams, not one: `TrainerController` (equipment) and
+  `GattTransport` (browser). The second exists mainly so the FTMS driver itself
+  is testable — a mock at the controller seam replaces the driver and therefore
+  can never exercise its retry logic, which was the one branch that mattered.
 - **2026-08-24** — Cloudflare quick tunnels are the gateway for now. The LAN
   cannot work (plain http is not a secure context, and the phone could not
   reach the Mac anyway), and a tunnel needs no account and no DNS. Accepted

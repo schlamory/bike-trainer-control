@@ -3,8 +3,10 @@
 // a fallback for going offline. Cache-first would strand you on a stale build.
 const CACHE = 'hammer-v1';
 const SHELL = [
-  '.', 'index.html', 'style.css', 'app.js', 'trainer.js', 'ftms.js',
-  'workout.js', 'manifest.json', 'icon.svg',
+  '.', 'index.html', 'style.css', 'app.js', 'manifest.json', 'icon.svg',
+  'core/contracts.js', 'core/workout.js', 'core/session.js',
+  'drivers/ftms.js', 'drivers/ftms-ble.js', 'drivers/mock.js',
+  'transport/web-bluetooth.js', 'transport/mock-gatt.js',
   'diagnostics.html', 'diagnostics.js', 'diagnostics.css',
 ];
 

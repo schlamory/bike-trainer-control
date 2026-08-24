@@ -34,13 +34,48 @@ Press **Connect trainer**, pick the Hammer, then **Start ride**. Workout syntax
 matches `workout.py`: `75w/60s, 230w/20s` with a total time, and the pattern
 repeats to fill it.
 
-- `web/ftms.js` — the protocol, ported from `bike_trainer/ftms.py`.
-- `web/workout.js` — step parsing, plan building, power zones.
-- `web/trainer.js` — connection and the confirm-and-retry ERG loop.
-- `web/app.js` — UI and the 1 Hz ride loop.
+### Architecture
 
-`window.hammer` is exposed in the console for poking at state:
-`hammer.simulate(65)` jumps the clock to 65 s in without a trainer attached.
+Two seams, so the core knows about neither the browser nor the trainer:
+
+```
+  app.js            UI only: renders session events, turns clicks into intent
+      │
+  core/             the ride loop and workout model — no DOM, no BLE, no FTMS
+      │  ▲ TrainerController          equipment seam
+  drivers/          speaks FTMS; knows nothing about the browser
+      │  ▲ GattTransport              browser seam
+  transport/        the only place navigator.bluetooth is touched
+```
+
+| Module | Responsibility |
+| --- | --- |
+| `core/contracts.js` | Both interfaces, as JSDoc types plus a runtime check |
+| `core/workout.js` | Step parsing, plan building, power zones. Pure |
+| `core/session.js` | The ride loop: clock, plan traversal, keepalives. Pure |
+| `drivers/ftms.js` | FTMS byte encode/decode. Pure |
+| `drivers/ftms-ble.js` | FTMS over any transport: handshake, confirm-and-retry |
+| `drivers/mock.js` | Simulated trainer at the controller seam |
+| `transport/web-bluetooth.js` | `GattTransport` over Web Bluetooth |
+| `transport/mock-gatt.js` | Simulated trainer at the byte level |
+
+Swapping either seam is why an ANT+ FE-C bridge or a non-browser host could be
+added without touching the workout logic.
+
+### Running without hardware
+
+```
+http://localhost:8756/?mock                  simulated trainer, quickest for UI work
+http://localhost:8756/?mock=gatt             real FTMS driver over a fake radio
+http://localhost:8756/?mock=gatt&stick=0.4   40% of targets stick, exercising retry
+```
+
+`?mock=gatt` is the useful one for correctness: it runs the actual driver —
+handshake, response parsing, confirm-and-retry — against a byte-level emulation
+of the H3, including its quirk that Reset revokes control. It is how the retry
+path was first proven to work, since the real ERG-stick bug never reproduced.
+
+`window.hammer` exposes `trainer`, `session` and `ui` in the console.
 
 Web Bluetooth needs a secure context, which `localhost` satisfies — no TLS
 setup required. Only one BLE connection to the trainer can exist at a time, so
