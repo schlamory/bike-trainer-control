@@ -2,6 +2,12 @@
 
 Tools for driving a Saris H3 over BLE FTMS.
 
+**Live app: https://schlamory.github.io/bike-trainer-control/**
+
+Open it in Chrome or Edge on the desktop, or Bluefy on iOS. Safari has no Web
+Bluetooth and never will. Deploys automatically on any push to `main` that
+touches `web/`.
+
 - `saris-h3-workout-runner.md` — the original build orientation doc.
 - `FEEDBACK.md` — running notes: next steps, open questions, decision log.
   Start here for what to do next.
@@ -83,19 +89,22 @@ quit the Python tools before connecting the browser.
 
 ### On the phone
 
-iOS needs Bluefy or BLE Link — Safari has no Web Bluetooth and never will.
-A LAN address will not do, because plain `http://` is not a secure context, so
-serve it through a tunnel:
+Just open <https://schlamory.github.io/bike-trainer-control/> in Bluefy and
+bookmark it. iOS needs Bluefy or BLE Link — Safari has no Web Bluetooth.
+
+`web/diagnostics.html` reports what a given browser can actually do, and is
+worth re-running after any Bluefy update:
+<https://schlamory.github.io/bike-trainer-control/diagnostics.html>
+
+To test an unpushed change on the phone, tunnel the local server instead:
 
 ```sh
-uv run serve.py --lan --no-open                    # terminal 1
+uv run serve.py --no-open                          # terminal 1
 cloudflared tunnel --url http://localhost:8756     # terminal 2, prints an HTTPS URL
 ```
 
-Open that URL in Bluefy. `web/diagnostics.html` reports what a given browser
-can actually do and is worth running after any Bluefy update. The tunnel URL
-rotates on restart and the page is public while it runs; a permanent home on a
-personal server is planned.
+The tunnel URL rotates on restart and the page is public while it runs, so it
+is for testing only — Pages is the address to bookmark.
 
 ## Usage
 

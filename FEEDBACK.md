@@ -90,7 +90,20 @@ That means the app can degrade to a notify-only path without losing the
 ERG-stick protection, which is the thing that actually matters. Worth building
 as an explicit fallback mode rather than discovering it in a panic.
 
-### Serving to the phone: cloudflared, for now
+### Hosted on GitHub Pages
+
+**<https://schlamory.github.io/bike-trainer-control/>** — stable, HTTPS, and
+redeployed by `.github/workflows/pages.yml` on any push to `main` touching
+`web/`. The app is static, so the workflow uploads the directory with no build
+step. Verified running from the hosted subpath: secure context, modules resolve,
+service worker scoped correctly, a full ride completed.
+
+This is the address to bookmark in Bluefy, and it is what makes the iOS
+Shortcut idea possible — a home-screen shortcut needs a URL that does not move.
+
+The tunnel below is now only for testing changes that have not been pushed.
+
+### Serving during development: cloudflared
 
 Web Bluetooth requires a **secure context** — HTTPS, or `localhost`. A phone
 loading `http://192.168.x.x:8756` is neither, so the LAN path is a dead end
@@ -99,8 +112,95 @@ firewall off and the server correctly bound to all interfaces, the phone still
 could not reach it. Not worth further debugging, since the secure-context wall
 sits behind it anyway.)
 
-**Current answer: a Cloudflare quick tunnel.** Verified working end to end —
-this is how Bluefy was tested and how the app runs on the phone today.
+A Cloudflare quick tunnel puts an unpushed working copy on the phone. This is
+how Bluefy was first verified, before Pages existed.
+
+```sh
+uv run serve.py --lan --no-open        # terminal 1: static files on :8756
+cloudflared tunnel --url http://localhost:8756   # terminal 2: prints the HTTPS URL
+```
+
+`cloudflared` is installed via Homebrew. No account or login is needed for
+quick tunnels.
+
+Two properties to keep in mind:
+
+- **The URL changes every time the tunnel restarts.** Fine for testing, no good
+  for a home-screen shortcut or a saved bookmark.
+- **The page is publicly reachable while the tunnel is up.** It is a static app
+  with no secrets and no server-side state, so the exposure is low, but it is
+  real — stop the tunnel when you are done rather than leaving it running.
+
+### Later: a permanent home
+
+Superseded — GitHub Pages is the permanent home, and it costs nothing to keep.
+Moving to a personal server is now optional rather than planned. If it happens,
+the requirement stays trivial: static HTTPS hosting and a stable hostname.
+`web/` is the whole deployable artifact — no build step, runtime, or backend.
+
+### RESOLVED 24 Aug 2026: indications work in Bluefy
+
+Tested on Bluefy 3.9.3 / iOS 18.7. Control-point indications arrive normally,
+the feature read matches the Mac byte for byte, and the status echo confirms
+targets. **Full FTMS control works on the phone; the app needs no protocol
+changes.** Details in `FINDINGS.md`.
+
+Two things the test caught:
+
+- `requestDevice` rejects 16-bit numeric UUIDs — fixed, `web/ftms.js` now uses
+  canonical 128-bit strings everywhere. The app would not have connected
+  otherwise.
+- Service workers are unavailable in Bluefy, so no offline shell or
+  installability there. Already guarded; desktop keeps both.
+
+The notify-only fallback below is therefore **not needed**. Keeping the
+reasoning as insurance in case a future Bluefy release regresses.
+
+### ~~The pivotal unknown~~, and a fallback nobody seems to have noticed
+
+FTMS delivers control-point responses over **indications**, and it is
+undocumented whether Bluefy's shim subscribes to the indicate path. If it
+silently does notify-only, every control-point response vanishes.
+
+**But the control point is not the only confirmation channel.** From
+`FINDINGS.md`: Fitness Machine Status (`0x2ADA`) is a **notify** characteristic,
+it fires within ~10 ms of every target change, and it *echoes the exact
+wattage*. So if indications turn out to be unavailable:
+
+- Target confirmation still works — arguably better, since the echo carries the
+  value rather than a bare success code.
+- Control acquisition becomes inferential: send Request Control and Start
+  optimistically, then treat *"a Set Target Power produced a matching `0x2ADA`
+  echo"* as proof that control was granted. If no echo arrives, we never had it.
+
+That means the app can degrade to a notify-only path without losing the
+ERG-stick protection, which is the thing that actually matters. Worth building
+as an explicit fallback mode rather than discovering it in a panic.
+
+### Hosted on GitHub Pages
+
+**<https://schlamory.github.io/bike-trainer-control/>** — stable, HTTPS, and
+redeployed by `.github/workflows/pages.yml` on any push to `main` touching
+`web/`. The app is static, so the workflow uploads the directory with no build
+step. Verified running from the hosted subpath: secure context, modules resolve,
+service worker scoped correctly, a full ride completed.
+
+This is the address to bookmark in Bluefy, and it is what makes the iOS
+Shortcut idea possible — a home-screen shortcut needs a URL that does not move.
+
+The tunnel below is now only for testing changes that have not been pushed.
+
+### Serving during development: cloudflared
+
+Web Bluetooth requires a **secure context** — HTTPS, or `localhost`. A phone
+loading `http://192.168.x.x:8756` is neither, so the LAN path is a dead end
+regardless of connectivity. (It also simply did not work: with the macOS
+firewall off and the server correctly bound to all interfaces, the phone still
+could not reach it. Not worth further debugging, since the secure-context wall
+sits behind it anyway.)
+
+A Cloudflare quick tunnel puts an unpushed working copy on the phone. This is
+how Bluefy was first verified, before Pages existed.
 
 ```sh
 uv run serve.py --lan --no-open        # terminal 1: static files on :8756
@@ -209,8 +309,10 @@ If it does enforce it, in order of effort:
    browser. Ride an hour with the screen locking and see whether GATT holds.
    The app calls both `navigator.wakeLock` and Bluefy's proprietary
    `setScreenDimEnabled`, so instrument which one actually fires.
-6. **Home-screen launch.** Find out whether Bluefy registers a URL scheme; if it
-   does, an iOS Shortcut gives a one-tap icon.
+6. **Home-screen launch.** Now unblocked by the stable Pages URL. Find out
+   whether Bluefy registers a URL scheme; if it does, an iOS Shortcut pointing
+   at the Pages address gives a one-tap home-screen icon. This is the closest
+   thing to a real PWA install that iOS allows for a BLE app.
 
 ---
 
@@ -263,7 +365,7 @@ If it does enforce it, in order of effort:
 | 2 | Does the GATT link survive an hour with the screen off? | Open, unpublished by anyone |
 | 3 | Can the ERG-stick bug be reproduced at all on firmware 31.065? | 26 changes, zero sticks. Unreproduced |
 | 4 | Does the retry logic work when it fires? | **Web driver: yes**, proven against a simulated stick. Python driver: still untested |
-| 5 | Does Bluefy expose a URL scheme for one-tap launch? | Open |
+| 5 | Does Bluefy expose a URL scheme for one-tap launch? | Open — now worth answering, the URL is stable |
 
 ---
 
@@ -275,6 +377,10 @@ If it does enforce it, in order of effort:
   same code, and the only variable is the browser's BLE shim.
 - **2026-08-24** — Service worker is network-first, not cache-first. Cache-first
   stranded the browser on a stale build during development.
+- **2026-08-24** — Hosted on GitHub Pages, deployed by Actions from `web/`.
+  Chosen over a personal server because it is free, needs no maintenance, and
+  the repo has nothing sensitive in it. Keeping `web/` where it is rather than
+  renaming to `docs/` or maintaining a `gh-pages` branch.
 - **2026-08-24** — Two seams, not one: `TrainerController` (equipment) and
   `GattTransport` (browser). The second exists mainly so the FTMS driver itself
   is testable — a mock at the controller seam replaces the driver and therefore
