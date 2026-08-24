@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bluetooth diagnostics — Hammer</title>
+<meta name="theme-color" content="#0B0E13">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="diagnostics.css">
+</head>
+<body class="diag">
+
+<header class="bar">
+  <div class="bar-id"><span class="bar-name">Bluetooth diagnostics</span></div>
+  <div class="bar-meta"><a class="btn btn-ghost" href="./">Back to app</a></div>
+</header>
+
+<main>
+  <section class="intro">
+    <h1>What can this browser actually do?</h1>
+    <p>
+      Runs the full FTMS sequence against the trainer and reports exactly which
+      parts work. The question that matters is whether
+      <strong>indications</strong> arrive on the control point — without them a
+      naive client looks like the trainer is ignoring it.
+    </p>
+    <p class="warn">
+      This briefly takes control of the trainer and sets a 50&nbsp;W target, so
+      resistance will change. Don't run it mid-ride.
+    </p>
+  </section>
+
+  <section class="verdict" id="verdict" hidden>
+    <span class="eyebrow">Verdict</span>
+    <div class="verdict-title" id="verdictTitle">—</div>
+    <p class="verdict-body" id="verdictBody"></p>
+  </section>
+
+  <section class="run">
+    <button class="btn btn-primary" id="runBtn">Run diagnostics</button>
+    <button class="btn" id="copyBtn" disabled>Copy report</button>
+    <span class="run-note" id="runNote">Environment checks run on load. Press the button for the Bluetooth tests.</span>
+  </section>
+
+  <section class="results" id="results"></section>
+
+  <details class="config" id="reportPanel">
+    <summary>Report text</summary>
+    <textarea id="reportText" class="report" readonly rows="18"
+              spellcheck="false" aria-label="Diagnostic report"></textarea>
+  </details>
+</main>
+
+<script src="diagnostics.js"></script>
+</body>
+</html>

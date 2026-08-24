@@ -72,16 +72,39 @@ That means the app can degrade to a notify-only path without losing the
 ERG-stick protection, which is the thing that actually matters. Worth building
 as an explicit fallback mode rather than discovering it in a panic.
 
+### Getting the page onto the phone at all
+
+Web Bluetooth requires a **secure context**: HTTPS, or `localhost`. A phone
+loading `http://192.168.x.x:8756` is neither, so the origin may be rejected
+before any Bluetooth call is made.
+
+`uv run serve.py --lan` binds all interfaces and prints the address to try.
+The diagnostics page reports `isSecureContext` as its second check, so it says
+immediately whether this is a problem — worth 30 seconds before assuming it is.
+Bluefy's shim may not enforce the requirement the way a standards-compliant
+browser does.
+
+If it does enforce it, in order of effort:
+
+1. **GitHub Pages** — the repo is already a static site under `web/`. Free
+   HTTPS, permanent URL, and the orientation doc's original suggestion.
+2. **A tunnel** (`cloudflared tunnel --url http://localhost:8756`) — instant
+   HTTPS for a one-off test, but it publishes the page publicly for the
+   duration.
+3. Self-signed cert served locally — needs the cert trusted in iOS Settings.
+   Fiddliest of the three; only worth it to stay entirely offline.
+
 ### iOS work items
 
-1. **Smoke-test Bluefy** against `web/` on the phone. The app already logs every
-   control-point response, so the Activity panel answers the indication question
-   directly. This is a fifteen-minute test and it gates everything below.
-2. **Use 128-bit UUID strings, not 16-bit numbers.** `web/ftms.js` currently
-   passes numeric shorthand (`0x1826`) to `requestDevice` and
-   `getPrimaryService`. Chrome expands these; a shim may not. Switching to
-   canonical `00001826-0000-1000-8000-00805f9b34fb` strings costs nothing and
-   removes a likely failure mode. **Do this before testing on the phone.**
+1. **Smoke-test Bluefy** with `web/diagnostics.html` — a standalone page that
+   runs the whole FTMS sequence and reports which parts work, ending in a plain
+   verdict (full control / notify-only fallback / nothing). It is a classic
+   script with no imports, so a shim that breaks ES modules still lets the
+   diagnostics run. Copy the report off the phone with the button.
+2. **UUID form.** `web/ftms.js` passes numeric shorthand (`0x1826`); Chrome
+   expands it, a shim may not. The diagnostics page now tries numeric first and
+   falls back to the canonical 128-bit string, and reports which one worked —
+   so measure before changing the app.
 3. **Add a notify-only fallback mode** per the section above, behind a flag that
    the app can set automatically when no indication arrives during handshake.
 4. **Check the service worker** — Bluefy's WKWebView may not support SW

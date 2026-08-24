@@ -1,0 +1,99 @@
+/* Diagnostics is a separate, dependency-free page: it has to render even when
+   the thing it is diagnosing is broken. */
+
+.diag main { max-width: 46rem; }
+
+.intro h1 {
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 5vw, 2.3rem);
+  font-weight: 700;
+  line-height: 1.1;
+  margin: 0 0 0.6rem;
+}
+
+.intro p { margin: 0 0 0.6rem; color: var(--dim); font-size: 0.92rem; }
+.intro .warn { color: var(--z3); }
+
+.verdict {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+  padding: var(--gap);
+}
+.verdict[data-level='pass'] { --accent: var(--z2); }
+.verdict[data-level='partial'] { --accent: var(--z3); }
+.verdict[data-level='fail'] { --accent: var(--z5); }
+
+.verdict-title {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin-top: 0.3rem;
+}
+.verdict-body { margin: 0.4rem 0 0; font-size: 0.9rem; color: var(--dim); }
+
+.run { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.run-note { font-size: 0.8rem; color: var(--faint); flex: 1 1 12rem; }
+
+.group { margin-top: 1.2rem; }
+
+.group-title {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--dim);
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.check-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.88rem;
+}
+
+.check-mark {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  flex: none;
+  width: 4.2rem;
+  text-transform: uppercase;
+}
+.check-row[data-r='pass'] .check-mark { color: var(--z2); }
+.check-row[data-r='fail'] .check-mark { color: var(--z5); }
+.check-row[data-r='warn'] .check-mark { color: var(--z3); }
+.check-row[data-r='info'] .check-mark { color: var(--dim); }
+.check-row[data-r='run']  .check-mark { color: var(--z3); }
+
+.check-label { flex: 1 1 auto; min-width: 0; }
+.check-detail {
+  display: block;
+  color: var(--faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.74rem;
+  line-height: 1.6;
+  word-break: break-word;
+  margin-top: 0.15rem;
+}
+
+.report {
+  width: 100%;
+  margin-top: 0.9rem;
+  background: var(--ink);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.7rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  line-height: 1.6;
+  resize: vertical;
+}

@@ -5,6 +5,7 @@ const CACHE = 'hammer-v1';
 const SHELL = [
   '.', 'index.html', 'style.css', 'app.js', 'trainer.js', 'ftms.js',
   'workout.js', 'manifest.json', 'icon.svg',
+  'diagnostics.html', 'diagnostics.js', 'diagnostics.css',
 ];
 
 self.addEventListener('install', (e) => {
