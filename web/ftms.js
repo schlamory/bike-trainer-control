@@ -1,15 +1,21 @@
 // FTMS (Fitness Machine Service, 0x1826) protocol.
 // Byte layouts verified against a Saris H3 on firmware 31.065 -- see FINDINGS.md.
 
-export const FTMS_SERVICE = 0x1826;
-export const CPS_SERVICE = 0x1818;
-export const DEVICE_INFO_SERVICE = 0x180a;
+// Canonical 128-bit form, NOT the 16-bit numeric shorthand. Chrome expands
+// numbers, but Bluefy's shim rejects them in requestDevice filters -- verified
+// on Bluefy 3.9.3 / iOS 18.7. Strings work everywhere, so use them everywhere.
+export const uuid16 = (n) =>
+  `0000${n.toString(16).padStart(4, '0')}-0000-1000-8000-00805f9b34fb`;
 
-export const INDOOR_BIKE_DATA = 0x2ad2;   // notify
-export const CONTROL_POINT = 0x2ad9;      // write + indicate
-export const MACHINE_FEATURE = 0x2acc;    // read
-export const MACHINE_STATUS = 0x2ada;     // notify
-export const POWER_RANGE = 0x2ad8;        // read
+export const FTMS_SERVICE = uuid16(0x1826);
+export const CPS_SERVICE = uuid16(0x1818);
+export const DEVICE_INFO_SERVICE = uuid16(0x180a);
+
+export const INDOOR_BIKE_DATA = uuid16(0x2ad2);   // notify
+export const CONTROL_POINT = uuid16(0x2ad9);      // write + indicate
+export const MACHINE_FEATURE = uuid16(0x2acc);    // read
+export const MACHINE_STATUS = uuid16(0x2ada);     // notify
+export const POWER_RANGE = uuid16(0x2ad8);        // read
 
 export const Op = {
   REQUEST_CONTROL: 0x00,

@@ -3,7 +3,7 @@
 A working doc. Newest decisions at the top of each section; strike things out
 rather than deleting them, so the reasoning stays visible.
 
-Last updated: 24 August 2026
+Last updated: 24 August 2026 (Bluefy verified)
 
 ---
 
@@ -51,7 +51,25 @@ So the goal should be restated as **"one-tap launch into a browser that can do
 BLE"**, not "PWA on iOS". The manifest and service worker still earn their keep
 for the desktop install and offline shell, so they stay.
 
-### The pivotal unknown, and a fallback nobody seems to have noticed
+### RESOLVED 24 Aug 2026: indications work in Bluefy
+
+Tested on Bluefy 3.9.3 / iOS 18.7. Control-point indications arrive normally,
+the feature read matches the Mac byte for byte, and the status echo confirms
+targets. **Full FTMS control works on the phone; the app needs no protocol
+changes.** Details in `FINDINGS.md`.
+
+Two things the test caught:
+
+- `requestDevice` rejects 16-bit numeric UUIDs — fixed, `web/ftms.js` now uses
+  canonical 128-bit strings everywhere. The app would not have connected
+  otherwise.
+- Service workers are unavailable in Bluefy, so no offline shell or
+  installability there. Already guarded; desktop keeps both.
+
+The notify-only fallback below is therefore **not needed**. Keeping the
+reasoning as insurance in case a future Bluefy release regresses.
+
+### ~~The pivotal unknown~~, and a fallback nobody seems to have noticed
 
 FTMS delivers control-point responses over **indications**, and it is
 undocumented whether Bluefy's shim subscribes to the indicate path. If it
@@ -96,20 +114,14 @@ If it does enforce it, in order of effort:
 
 ### iOS work items
 
-1. **Smoke-test Bluefy** with `web/diagnostics.html` — a standalone page that
-   runs the whole FTMS sequence and reports which parts work, ending in a plain
-   verdict (full control / notify-only fallback / nothing). It is a classic
-   script with no imports, so a shim that breaks ES modules still lets the
-   diagnostics run. Copy the report off the phone with the button.
-2. **UUID form.** `web/ftms.js` passes numeric shorthand (`0x1826`); Chrome
-   expands it, a shim may not. The diagnostics page now tries numeric first and
-   falls back to the canonical 128-bit string, and reports which one worked —
-   so measure before changing the app.
-3. **Add a notify-only fallback mode** per the section above, behind a flag that
-   the app can set automatically when no indication arrives during handshake.
-4. **Check the service worker** — Bluefy's WKWebView may not support SW
-   registration. The app must work with registration failing; it currently
-   catches that, but it is untested.
+1. ~~Smoke-test Bluefy~~ **Done.** `web/diagnostics.html` reports the full
+   picture and is worth re-running after any Bluefy update.
+2. ~~UUID form.~~ **Done.** Bluefy rejected numeric UUIDs in `requestDevice`;
+   `web/ftms.js` now uses 128-bit strings throughout.
+3. ~~Add a notify-only fallback mode.~~ **Not needed** — indications work.
+4. ~~Check the service worker.~~ **Answered: unavailable in Bluefy**
+   (`'serviceWorker' in navigator` is false). The feature test already handles
+   it. Offline shell and install are desktop-only.
 5. **Screen-off survival.** Nobody has published this for any iOS Web BLE
    browser. Ride an hour with the screen locking and see whether GATT holds.
    The app calls both `navigator.wakeLock` and Bluefy's proprietary
@@ -164,7 +176,7 @@ If it does enforce it, in order of effort:
 
 | # | Question | Status |
 | --- | --- | --- |
-| 1 | Does Bluefy deliver GATT indications? | Open — gates the whole iOS path |
+| 1 | ~~Does Bluefy deliver GATT indications?~~ | **Answered: yes**, Bluefy 3.9.3 / iOS 18.7 |
 | 2 | Does the GATT link survive an hour with the screen off? | Open, unpublished by anyone |
 | 3 | Can the ERG-stick bug be reproduced at all on firmware 31.065? | 26 changes, zero sticks. Unreproduced |
 | 4 | Does the retry logic work when it fires? | Never executed. Needs fault injection |
@@ -180,6 +192,9 @@ If it does enforce it, in order of effort:
   same code, and the only variable is the browser's BLE shim.
 - **2026-08-24** — Service worker is network-first, not cache-first. Cache-first
   stranded the browser on a stale build during development.
+- **2026-08-24** — Web UUIDs are canonical 128-bit strings, never 16-bit
+  numeric shorthand. Chrome accepts both; Bluefy's `requestDevice` rejects
+  numbers. Strings are the only form that works in both.
 - **2026-08-24** — Never send FTMS Reset (`0x01`). It revokes the control grant
   on this trainer, contradicting the orientation doc's prescribed handshake. See
   `FINDINGS.md`.

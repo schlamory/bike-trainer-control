@@ -219,15 +219,75 @@ Information or a capability bitfield.
 
 ---
 
+## Bluefy on iOS: the shim works, with two caveats
+
+Measured 24 Aug 2026 with `web/diagnostics.html` on **Bluefy 3.9.3, iOS 18.7**,
+served over HTTPS through a Cloudflare quick tunnel.
+
+### Indications work. This was the pivotal unknown and the answer is yes.
+
+The orientation doc's headline risk — that Bluefy might silently subscribe
+notify-only, losing every control-point response — **does not materialise**.
+Subscribing to the indicate-only `0x2AD9` was accepted, and all three writes
+came back with proper indications:
+
+```
+wrote 00        →  80 00 01   Request Control -> Success
+wrote 07        →  80 07 01   Start or Resume -> Success
+wrote 05 32 00  →  80 05 01   Set Target Power -> Success
+```
+
+`0x2ACC` read back `86 40 00 00 0c e0 00 00` — byte-identical to the Mac. The
+status echo confirmed 50 W on `0x2ADA`, and Indoor Bike Data notifications
+flowed. So the full control path, including the ERG-stick protection, works
+unchanged on the phone. **The notify-only fallback designed in `FEEDBACK.md` is
+not needed** — keep it documented as insurance, but do not build it.
+
+### Caveat 1: requestDevice rejects 16-bit numeric UUIDs
+
+```
+[WARN] requestDevice with numeric UUID       →  error "2"
+[PASS] requestDevice with 128-bit UUID string
+```
+
+Chrome expands `0x1826` into the full UUID; Bluefy does not, and fails with an
+unhelpful error whose message is the bare string `2`. Note the asymmetry:
+`getPrimaryService(0x1826)` **did** accept the numeric form. Only the
+`requestDevice` filter is affected.
+
+`web/ftms.js` now exports canonical 128-bit strings throughout, which both
+browsers accept. Anything new that touches a UUID should do the same.
+
+### Caveat 2: no service workers
+
+`'serviceWorker' in navigator` is **false** in Bluefy. There is no offline
+shell and no installability there — the manifest and `sw.js` earn their keep
+only on desktop. The app already guards its registration behind a feature test,
+so nothing breaks.
+
+### The rest of the shim
+
+| Capability | Bluefy 3.9.3 |
+| --- | --- |
+| `requestDevice`, `getAvailability`, `getDevices` | present |
+| `requestLEScan` | missing (unused here) |
+| `writeValueWithResponse` | present |
+| `navigator.wakeLock` | present |
+| `setScreenDimEnabled` | present — Bluefy's proprietary screen hold |
+| `localStorage` | works |
+
+Both wake-lock mechanisms exist, so the app's defensive "call both" approach is
+right; which one actually keeps the screen alive is still untested.
+
+---
+
 ## Still open
 
 Nothing here needed the phone, which is the point — "what does the trainer do"
 is now separated from "what does Bluefy do". Remaining, in the doc's priority order:
 
-1. **Does Bluefy deliver GATT indications?** *Still the pivotal unknown.*
-   Indications work fine from CoreBluetooth via bleak, which is mildly
-   encouraging for the shim-most-likely-works-by-accident theory, but it is not
-   evidence about Bluefy. Needs the static test page on the phone.
+1. ~~**Does Bluefy deliver GATT indications?**~~ **Answered: yes.** See the
+   Bluefy section above. Full FTMS control works on the phone.
 2. **ERG stick under load** — *partially answered.* 26 target changes under
    load produced zero sticks, so it is at minimum not frequent on firmware
    31.065. The open half is whether the retry logic actually works when it
