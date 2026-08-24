@@ -10,6 +10,7 @@ script from this repo first.
 """
 
 import argparse
+import errno
 import functools
 import http.server
 import socketserver
@@ -54,7 +55,20 @@ def main() -> None:
     url = f"http://localhost:{args.port}"
     handler = functools.partial(Handler, directory=str(WEB))
     socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer((host, args.port), handler) as httpd:
+    try:
+        server = socketserver.TCPServer((host, args.port), handler)
+    except OSError as e:
+        if e.errno != errno.EADDRINUSE:
+            raise
+        print(f"Port {args.port} is already in use.\n")
+        print("Something is already serving there -- possibly an earlier run of this\n"
+              "script. Find it with:\n")
+        print(f"    lsof -ti :{args.port}\n")
+        print(f"Stop it with `lsof -ti :{args.port} | xargs kill`, or pick another\n"
+              f"port with `-p`.")
+        raise SystemExit(1)
+
+    with server as httpd:
         print(f"Serving {WEB} at {url}")
         if args.lan:
             print(f"On the same network:  http://{lan_ip()}:{args.port}")
