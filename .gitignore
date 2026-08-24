@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Probe output and ride logs land in the working directory. The runs that back
+# claims in FINDINGS.md are committed under data/ instead.
+probe-report.json
+/ride-*.csv
+/workout-*.log

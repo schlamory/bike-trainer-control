@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hammer — ERG workout runner</title>
+<meta name="theme-color" content="#0B0E13">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar-id">
+    <span class="dot" id="dot" data-state="off"></span>
+    <span class="bar-name" id="deviceName">No trainer</span>
+  </div>
+  <div class="bar-meta">
+    <span id="wakeState" class="chip" hidden>screen held</span>
+    <button class="btn btn-ghost" id="connectBtn">Connect trainer</button>
+  </div>
+</header>
+
+<main>
+  <div class="notice" id="notice" hidden>
+    <div class="notice-body">
+      <strong id="noticeTitle">Couldn't connect</strong>
+      <span id="noticeText"></span>
+      <span class="notice-hint" id="noticeHint" hidden></span>
+    </div>
+    <button class="notice-close" id="noticeClose" aria-label="Dismiss">&times;</button>
+  </div>
+
+  <!-- NOW ------------------------------------------------------------- -->
+  <section class="now" id="nowCard" data-zone="z1">
+    <div class="now-head">
+      <span class="eyebrow">Now</span>
+      <span class="zone" id="zoneLabel">—</span>
+    </div>
+
+    <div class="now-body">
+      <div class="metric metric-target">
+        <div class="metric-value" id="targetW">—</div>
+        <div class="metric-unit">watts target</div>
+      </div>
+      <div class="metric metric-clock">
+        <div class="metric-value" id="countdown">0:00</div>
+        <div class="metric-unit">remaining</div>
+      </div>
+    </div>
+
+    <div class="progress"><div class="progress-fill" id="intervalFill"></div></div>
+
+    <div class="live">
+      <div class="live-item"><span class="live-value" id="actualW">—</span><span class="live-label">actual W</span></div>
+      <div class="live-item"><span class="live-value" id="cadence">—</span><span class="live-label">rpm</span></div>
+      <div class="live-item"><span class="live-value" id="elapsed">0:00</span><span class="live-label">elapsed</span></div>
+      <div class="live-item"><span class="live-value" id="intervalCount">—</span><span class="live-label">interval</span></div>
+    </div>
+  </section>
+
+  <!-- NEXT ------------------------------------------------------------ -->
+  <section class="next" id="nextCard" data-zone="z1">
+    <span class="eyebrow">Next</span>
+    <div class="next-body">
+      <span class="next-watts" id="nextW">—</span>
+      <span class="next-unit">W</span>
+      <span class="next-sep">for</span>
+      <span class="next-dur" id="nextDur">—</span>
+    </div>
+    <span class="next-in" id="nextIn"></span>
+  </section>
+
+  <!-- PROFILE --------------------------------------------------------- -->
+  <section class="profile-wrap">
+    <div class="profile" id="profile" aria-hidden="true"></div>
+    <div class="profile-axis">
+      <span id="profileStart">0:00</span>
+      <span id="profileTotal">—</span>
+    </div>
+  </section>
+
+  <!-- TRANSPORT ------------------------------------------------------- -->
+  <section class="transport">
+    <button class="btn btn-primary" id="startBtn" disabled>Start ride</button>
+    <button class="btn" id="pauseBtn" disabled>Pause</button>
+    <button class="btn btn-danger" id="stopBtn" disabled>End ride</button>
+  </section>
+
+  <!-- CONFIG ---------------------------------------------------------- -->
+  <details class="config" id="configPanel" open>
+    <summary>Workout</summary>
+    <div class="config-grid">
+      <label class="field field-wide">
+        <span>Intervals</span>
+        <input id="stepsInput" type="text" value="75w/60s, 230w/20s" spellcheck="false"
+               autocomplete="off">
+        <small>Watts and duration, comma separated. The pattern repeats to fill the total.</small>
+      </label>
+      <label class="field">
+        <span>Total time</span>
+        <input id="durationInput" type="text" value="10m" spellcheck="false" autocomplete="off">
+      </label>
+      <label class="field">
+        <span>FTP</span>
+        <input id="ftpInput" type="number" value="250" min="50" max="600" step="5">
+        <small>Colour only.</small>
+      </label>
+    </div>
+    <div class="config-foot">
+      <label class="check"><input type="checkbox" id="onceInput"> Run pattern once</label>
+      <span class="summary" id="planSummary"></span>
+    </div>
+    <p class="error" id="configError" hidden></p>
+  </details>
+
+  <details class="config">
+    <summary>Activity</summary>
+    <div class="log" id="log"></div>
+  </details>
+</main>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

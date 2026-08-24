@@ -1,0 +1,16 @@
+[project]
+name = "bike-trainer-control"
+version = "0.1.0"
+description = "Saris H3 / BLE FTMS trainer control tools"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "bleak>=3.0.2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["bike_trainer"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
