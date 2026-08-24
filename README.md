@@ -46,6 +46,22 @@ Web Bluetooth needs a secure context, which `localhost` satisfies — no TLS
 setup required. Only one BLE connection to the trainer can exist at a time, so
 quit the Python tools before connecting the browser.
 
+### On the phone
+
+iOS needs Bluefy or BLE Link — Safari has no Web Bluetooth and never will.
+A LAN address will not do, because plain `http://` is not a secure context, so
+serve it through a tunnel:
+
+```sh
+uv run serve.py --lan --no-open                    # terminal 1
+cloudflared tunnel --url http://localhost:8756     # terminal 2, prints an HTTPS URL
+```
+
+Open that URL in Bluefy. `web/diagnostics.html` reports what a given browser
+can actually do and is worth running after any Bluefy update. The tunnel URL
+rotates on restart and the page is public while it runs; a permanent home on a
+personal server is planned.
+
 ## Usage
 
 ```sh
