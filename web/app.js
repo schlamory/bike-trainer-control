@@ -17,7 +17,8 @@ import { FtmsBleTrainer } from './drivers/ftms-ble.js';
 import { MockTrainer } from './drivers/mock.js';
 import { RideSession } from './core/session.js';
 import {
-  repeatSet, planTotal, planWorkKj, formatClock, formatDuration, zoneFor,
+  buildFromSets, setDuration, planTotal, planWorkKj,
+  formatClock, formatDuration, zoneFor,
 } from './core/workout.js';
 import * as Workouts from './core/workouts.js';
 
@@ -37,8 +38,7 @@ const el = {
   workoutPicker: $('workoutPicker'), workoutName: $('workoutName'),
   saveWorkout: $('saveWorkout'), deleteWorkout: $('deleteWorkout'),
   pickerNote: $('pickerNote'),
-  intervals: $('intervals'), addInterval: $('addInterval'),
-  repeatInput: $('repeatInput'), ftpInput: $('ftpInput'),
+  sets: $('sets'), addSet: $('addSet'), ftpInput: $('ftpInput'),
   planSummary: $('planSummary'), configError: $('configError'),
   configPanel: $('configPanel'), log: $('log'),
   notice: $('notice'), noticeTitle: $('noticeTitle'), noticeText: $('noticeText'),
@@ -61,7 +61,7 @@ const trainer = mockMode === 'gatt'
 let session = null;
 const ui = {
   plan: [], ftp: 250, blocks: [], wakeLock: null,
-  set: [], repeat: 7, slug: null, name: '',
+  sets: [], slug: null, name: '',
 };
 
 // --- routing --------------------------------------------------------------
@@ -95,20 +95,20 @@ const STORE = 'hammer.v1';
 function save() {
   try {
     localStorage.setItem(STORE, JSON.stringify(
-      { set: ui.set, repeat: ui.repeat, ftp: ui.ftp, slug: ui.slug, name: ui.name }));
+      { sets: ui.sets, ftp: ui.ftp, slug: ui.slug, name: ui.name }));
   } catch { /* private mode, or full — not worth surfacing */ }
 }
 
 function load() {
   try {
     const raw = JSON.parse(localStorage.getItem(STORE) || 'null');
-    if (raw?.set?.length) {
-      ui.set = raw.set.map((s) => ({ watts: +s.watts || 0, seconds: +s.seconds || 0 }));
-      ui.repeat = +raw.repeat || 1;
+    if (raw?.sets?.length || raw?.set?.length) {
+      // normalise() also upgrades the pre-sets {set, repeat} shape.
+      ui.sets = Workouts.normalise(raw).sets;
       ui.ftp = +raw.ftp || 250;
       ui.slug = raw.slug ?? null;
       ui.name = raw.name ?? '';
-      return true;
+      return ui.sets.length > 0;
     }
   } catch { /* fall through to defaults */ }
   return false;
@@ -145,7 +145,7 @@ function renderPicker() {
   el.workoutPicker.append(unsaved);
 
   const current = Workouts.get(ui.slug);
-  const clean = Workouts.matches(current, ui.set, ui.repeat);
+  const clean = Workouts.matches(current, ui.sets);
   el.workoutPicker.value = clean ? ui.slug : '';
   el.deleteWorkout.hidden = !(current?.saved && clean);
 
@@ -165,13 +165,11 @@ function note(text, level = '') {
 
 function applyWorkout(w, { push = true } = {}) {
   if (!w) return false;
-  ui.set = w.set.map((s) => ({ ...s }));
-  ui.repeat = w.repeat;
+  ui.sets = w.sets.map((s) => ({ repeat: s.repeat, intervals: s.intervals.map((i) => ({ ...i })) }));
   ui.slug = w.slug;
   ui.name = w.name;
-  el.repeatInput.value = String(ui.repeat);
   el.workoutName.value = ui.name;
-  renderIntervals();
+  renderSets();
   rebuildPlan();
   setRoute(w.slug, { replace: !push });
   return true;
@@ -204,83 +202,179 @@ function log(message, level = 'info') {
 trainer.addEventListener('log', (e) => log(e.detail.message, e.detail.level));
 
 // --- interval editor ------------------------------------------------------
-function renderIntervals() {
-  el.intervals.replaceChildren();
-  ui.set.forEach((step, i) => {
-    const row = document.createElement('div');
-    row.className = 'interval-row';
-    row.style.setProperty('--blk', `var(--${zoneFor(step.watts, ui.ftp).key})`);
+function intervalRow(setIndex, ivIndex) {
+  const set = ui.sets[setIndex];
+  const step = set.intervals[ivIndex];
 
-    const idx = document.createElement('span');
-    idx.className = 'interval-index';
-    idx.textContent = String(i + 1);
+  const row = document.createElement('div');
+  row.className = 'interval-row';
+  row.style.setProperty('--blk', `var(--${zoneFor(step.watts, ui.ftp).key})`);
 
-    const mk = (cls, value, label, max) => {
-      const inp = document.createElement('input');
-      inp.type = 'number';
-      inp.inputMode = 'numeric';
-      inp.className = `num ${cls}`;
-      inp.value = String(value);
-      inp.min = '0';
-      inp.max = String(max);
-      inp.setAttribute('aria-label', `Interval ${i + 1} ${label}`);
-      return inp;
+  const idx = document.createElement('span');
+  idx.className = 'interval-index';
+  idx.textContent = String(ivIndex + 1);
+
+  const mk = (cls, value, label, max) => {
+    const inp = document.createElement('input');
+    inp.type = 'number';
+    inp.inputMode = 'numeric';
+    inp.className = `num ${cls}`;
+    inp.value = String(value);
+    inp.min = '0';
+    inp.max = String(max);
+    inp.setAttribute('aria-label', `Set ${setIndex + 1} interval ${ivIndex + 1} ${label}`);
+    return inp;
+  };
+
+  const w = mk('num-w', step.watts, 'power in watts', 3000);
+  w.step = '5';
+  const s = mk('num-t', Math.round(step.seconds), 'duration in seconds', 7200);
+
+  const unit = (t) => {
+    const u = document.createElement('span');
+    u.className = 'unit';
+    u.textContent = t;
+    return u;
+  };
+
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'row-remove';
+  del.innerHTML = '&times;';
+  del.setAttribute('aria-label', `Remove set ${setIndex + 1} interval ${ivIndex + 1}`);
+  del.disabled = set.intervals.length <= 1;
+  del.addEventListener('click', () => {
+    set.intervals.splice(ivIndex, 1);
+    renderSets();
+    rebuildPlan();
+  });
+
+  const clamp = (v, hi) => Math.max(0, Math.min(hi, Math.round(+v) || 0));
+  const commit = () => {
+    set.intervals[ivIndex] = { watts: clamp(w.value, 3000), seconds: clamp(s.value, 7200) };
+    rebuildPlan();
+    row.style.setProperty('--blk',
+      `var(--${zoneFor(set.intervals[ivIndex].watts, ui.ftp).key})`);
+  };
+  for (const inp of [w, s]) inp.addEventListener('input', commit);
+
+  row.append(idx, w, unit('W'), s, unit('s'), del);
+  return row;
+}
+
+function renderSets() {
+  el.sets.replaceChildren();
+
+  ui.sets.forEach((set, si) => {
+    const block = document.createElement('div');
+    block.className = 'set';
+
+    // header: which set, how long it runs, and how to move or drop it
+    const head = document.createElement('div');
+    head.className = 'set-head';
+
+    const label = document.createElement('span');
+    label.className = 'set-label';
+    label.textContent = `Set ${si + 1}`;
+
+    const dur = document.createElement('span');
+    dur.className = 'set-dur';
+    dur.textContent = formatDuration(setDuration(set));
+
+    const tools = document.createElement('div');
+    tools.className = 'set-tools';
+
+    const tool = (glyph, label2, disabled, fn) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'set-btn';
+      b.innerHTML = glyph;
+      b.setAttribute('aria-label', label2);
+      b.disabled = disabled;
+      b.addEventListener('click', fn);
+      return b;
     };
 
-    const w = mk('num-w', step.watts, 'power in watts', 3000);
-    w.step = '5';
-    const s = mk('num-t', Math.round(step.seconds), 'duration in seconds', 7200);
-
-    const unit = (t) => {
-      const u = document.createElement('span');
-      u.className = 'unit';
-      u.textContent = t;
-      return u;
+    const move = (from, to) => {
+      const [moved] = ui.sets.splice(from, 1);
+      ui.sets.splice(to, 0, moved);
+      renderSets();
+      rebuildPlan();
     };
 
-    const del = document.createElement('button');
-    del.type = 'button';
-    del.className = 'row-remove';
-    del.innerHTML = '&times;';
-    del.setAttribute('aria-label', `Remove interval ${i + 1}`);
-    del.disabled = ui.set.length <= 1;
-    del.addEventListener('click', () => {
-      ui.set.splice(i, 1);
-      renderIntervals();
+    tools.append(
+      tool('&uarr;', `Move set ${si + 1} earlier`, si === 0, () => move(si, si - 1)),
+      tool('&darr;', `Move set ${si + 1} later`, si === ui.sets.length - 1, () => move(si, si + 1)),
+    );
+    const del = tool('&times;', `Remove set ${si + 1}`, ui.sets.length <= 1, () => {
+      ui.sets.splice(si, 1);
+      renderSets();
       rebuildPlan();
     });
+    del.classList.add('set-del');
+    tools.append(del);
 
-    const clamp = (v, hi) => Math.max(0, Math.min(hi, Math.round(+v) || 0));
-    const commit = () => {
-      ui.set[i] = { watts: clamp(w.value, 3000), seconds: clamp(s.value, 7200) };
+    head.append(label, dur, tools);
+
+    // intervals
+    const list = document.createElement('div');
+    list.className = 'intervals';
+    set.intervals.forEach((_, ii) => list.append(intervalRow(si, ii)));
+
+    const addIv = document.createElement('button');
+    addIv.type = 'button';
+    addIv.className = 'btn btn-add btn-add-interval';
+    addIv.textContent = '+ Add interval';
+    addIv.addEventListener('click', () => {
+      const last = set.intervals[set.intervals.length - 1];
+      set.intervals.push(last ? { ...last } : { watts: 150, seconds: 60 });
+      renderSets();
       rebuildPlan();
-      row.style.setProperty('--blk', `var(--${zoneFor(ui.set[i].watts, ui.ftp).key})`);
-    };
-    for (const inp of [w, s]) inp.addEventListener('input', commit);
+      el.sets.children[si]?.querySelector('.intervals')
+        ?.lastElementChild?.querySelector('.num-w')?.focus();
+    });
 
-    row.append(idx, w, unit('W'), s, unit('s'), del);
-    el.intervals.append(row);
+    // repeat
+    const foot = document.createElement('label');
+    foot.className = 'repeat set-foot';
+    const rlabel = document.createElement('span');
+    rlabel.textContent = 'Repeat';
+    const rinput = document.createElement('input');
+    rinput.type = 'number';
+    rinput.inputMode = 'numeric';
+    rinput.min = '1';
+    rinput.max = '99';
+    rinput.value = String(set.repeat);
+    rinput.setAttribute('aria-label', `Repeat set ${si + 1}`);
+    rinput.addEventListener('input', () => {
+      set.repeat = Math.max(1, Math.min(99, parseInt(rinput.value, 10) || 1));
+      dur.textContent = formatDuration(setDuration(set));
+      rebuildPlan();
+    });
+    const x = document.createElement('span');
+    x.className = 'repeat-x';
+    x.textContent = '×';
+    foot.append(rlabel, rinput, x);
+
+    block.append(head, list, addIv, foot);
+    el.sets.append(block);
   });
 }
 
-function addInterval() {
-  const last = ui.set[ui.set.length - 1];
-  ui.set.push(last ? { ...last } : { watts: 150, seconds: 60 });
-  renderIntervals();
+function addSet() {
+  ui.sets.push({ intervals: [{ watts: 150, seconds: 60 }], repeat: 1 });
+  renderSets();
   rebuildPlan();
-  el.intervals.lastElementChild?.querySelector('.num-w')?.focus();
+  el.sets.lastElementChild?.querySelector('.num-w')?.focus();
 }
 
 // --- plan and profile ------------------------------------------------------
 function rebuildPlan() {
   try {
-    ui.repeat = Math.max(1, Math.min(99, parseInt(el.repeatInput.value, 10) || 1));
     ui.ftp = Math.max(50, parseInt(el.ftpInput.value, 10) || 250);
 
-    const usable = ui.set.filter((s) => s.seconds > 0);
-    if (!usable.length) throw new Error('Give at least one interval a duration.');
-
-    ui.plan = repeatSet(usable, ui.repeat);
+    ui.plan = buildFromSets(ui.sets);
+    if (!ui.plan.length) throw new Error('Give at least one interval a duration.');
     el.configError.hidden = true;
     const secs = planTotal(ui.plan);
     const n = ui.plan.length;
@@ -510,7 +604,7 @@ el.saveWorkout.addEventListener('click', () => {
     el.workoutName.focus();
     return;
   }
-  const saved = Workouts.save({ name, set: ui.set, repeat: ui.repeat });
+  const saved = Workouts.save({ name, sets: ui.sets });
   if (!saved) { note('Could not save — browser storage is unavailable.'); return; }
   ui.slug = saved.slug;
   ui.name = saved.name;
@@ -540,14 +634,12 @@ window.addEventListener('popstate', () => {
   if (w) applyWorkout(w, { push: false });
 });
 
-el.addInterval.addEventListener('click', () => { if (!session?.running) addInterval(); });
-
-el.repeatInput.addEventListener('input', () => { if (!session?.running) rebuildPlan(); });
+el.addSet.addEventListener('click', () => { if (!session?.running) addSet(); });
 
 el.ftpInput.addEventListener('input', () => {
   if (session?.running) return;
   rebuildPlan();
-  renderIntervals();   // zone stripes follow FTP
+  renderSets();   // zone stripes follow FTP
 });
 
 window.addEventListener('unhandledrejection', (e) => {
@@ -558,16 +650,18 @@ window.addEventListener('unhandledrejection', (e) => {
 const restored = load();
 const routed = routeSlug() ? Workouts.get(routeSlug()) : null;
 
+const copySets = (w) => w.sets.map((s) => ({
+  repeat: s.repeat, intervals: s.intervals.map((i) => ({ ...i })),
+}));
+
 if (routed) {
   // A /workout/<slug> URL is an explicit request; it beats the last-used state.
-  ui.set = routed.set.map((s) => ({ ...s }));
-  ui.repeat = routed.repeat;
+  ui.sets = copySets(routed);
   ui.slug = routed.slug;
   ui.name = routed.name;
 } else if (!restored) {
-  const first = Workouts.PRESETS[0];
-  ui.set = first.set.map((s) => ({ ...s }));
-  ui.repeat = first.repeat;
+  const first = Workouts.normalise(Workouts.PRESETS[0]);
+  ui.sets = copySets(first);
   ui.slug = first.slug;
   ui.name = first.name;
   ui.ftp = 250;
@@ -579,10 +673,9 @@ const bootNote = (!routed && routeSlug())
   : null;
 if (bootNote) setRoute(ui.slug, { replace: true });
 
-el.repeatInput.value = String(ui.repeat);
 el.ftpInput.value = String(ui.ftp);
 el.workoutName.value = ui.name;
-renderIntervals();
+renderSets();
 rebuildPlan();
 if (ui.slug && !routed && !bootNote) setRoute(ui.slug, { replace: true });
 if (bootNote) note(bootNote);

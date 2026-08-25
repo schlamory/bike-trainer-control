@@ -418,15 +418,65 @@ main {
 .picker-note { margin: 0; font-size: 0.75rem; color: var(--faint); min-height: 1.1em; }
 .picker-note[data-level='good'] { color: var(--z2); }
 
-/* Interval rows: numeric inputs sized for thumbs, not a text grammar. */
-.intervals { margin-top: 0.9rem; display: flex; flex-direction: column; gap: 0.5rem; }
+/* A set is a group of intervals with its own repeat count. Sets play in
+   order, so a warm-up, a repeated main block and a cool-down read top to
+   bottom the way the ride happens. */
+.sets { margin-top: 0.9rem; display: flex; flex-direction: column; gap: 0.6rem; }
+
+.set {
+  background: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.6rem;
+}
+
+.set-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.set-label {
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.set-dur {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.set-tools { display: flex; gap: 0.15rem; margin-left: auto; }
+
+.set-btn {
+  width: 44px;
+  height: 44px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--faint);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.set-btn:hover:not(:disabled) { color: var(--text); border-color: var(--line); }
+.set-btn:disabled { opacity: 0.22; cursor: not-allowed; }
+.set-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.set-del:hover:not(:disabled) { color: var(--z5); }
 
 .interval-row {
   display: flex;
   align-items: center;
   gap: 0.35rem;
   padding: 0.4rem 0.5rem;
-  background: var(--ink);
+  background: var(--panel);
   border: 1px solid var(--line);
   border-left: 3px solid var(--blk, var(--z1));
   border-radius: 10px;
@@ -454,8 +504,7 @@ main {
   padding: 0.5rem 0.3rem;
   text-align: center;
   min-width: 0;
-  /* 44px minimum touch target */
-  min-height: 44px;
+  min-height: 44px;      /* thumb-sized */
   -moz-appearance: textfield;
 }
 .num::-webkit-outer-spin-button,
@@ -478,6 +527,7 @@ main {
   margin-left: auto;
   width: 44px;
   height: 44px;
+  min-height: 44px;
   background: none;
   border: 1px solid transparent;
   border-radius: 8px;
@@ -498,6 +548,23 @@ main {
   color: var(--dim);
 }
 .btn-add:hover { color: var(--text); }
+
+.btn-add-interval {
+  margin-top: 0.45rem;
+  padding: 0.5rem;
+  font-size: 0.78rem;
+  min-height: 40px;
+}
+
+.set-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+
+/* Interval rows: numeric inputs sized for thumbs, not a text grammar. */
+.intervals { display: flex; flex-direction: column; gap: 0.4rem; }
 
 .config-foot {
   display: flex;

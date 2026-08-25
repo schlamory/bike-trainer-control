@@ -78,6 +78,11 @@ https://schlamory.github.io/bike-trainer-control/workout/sprints
 https://schlamory.github.io/bike-trainer-control/workout/vo2-30-30
 ```
 
+A workout is an ordered list of **sets**, each `{intervals, repeat}`. A warm-up
+is a one-interval set played once; a main block is a two-interval set played
+seven times. Sets play in order, so warm-up / main / cool-down reads top to
+bottom the way the ride happens.
+
 Four presets ship in `web/core/workouts.js` (`sprints`, `vo2-30-30`,
 `threshold-2x10`, `recovery`), sized around a 250 W FTP. Editing one and
 pressing Save stores an editable copy under its own slug; saved workouts shadow

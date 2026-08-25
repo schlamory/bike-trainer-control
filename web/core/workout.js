@@ -38,12 +38,32 @@ export function buildPlan(steps, total, { once = false } = {}) {
   return plan;
 }
 
-/** Play a set of intervals through N times. The UI's model of a workout. */
+/** Play a set of intervals through N times. */
 export function repeatSet(steps, times) {
   const out = [];
   const n = Math.max(1, Math.floor(times) || 1);
   for (let i = 0; i < n; i++) out.push(...steps.map((s) => ({ ...s })));
   return out;
+}
+
+/**
+ * Flatten a workout's sets into the flat interval list the ride loop walks.
+ * Each set contributes its intervals repeated, and sets play in order — so a
+ * warm-up set, a repeated main set and a cool-down set become one sequence.
+ */
+export function buildFromSets(sets) {
+  const plan = [];
+  for (const s of sets) {
+    const usable = (s.intervals || []).filter((i) => i.seconds > 0);
+    if (usable.length) plan.push(...repeatSet(usable, s.repeat));
+  }
+  return plan;
+}
+
+/** Seconds a single set contributes, repeats included. */
+export function setDuration(s) {
+  const per = (s.intervals || []).reduce((a, i) => a + (i.seconds > 0 ? i.seconds : 0), 0);
+  return per * Math.max(1, Math.floor(s.repeat) || 1);
 }
 
 export function planTotal(plan) {
