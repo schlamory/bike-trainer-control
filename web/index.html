@@ -32,7 +32,7 @@
 <main>
   <div class="notice" id="notice" hidden>
     <div class="notice-body">
-      <strong id="noticeTitle">Couldn't connect</strong>
+      <strong id="noticeTitle"></strong>
       <span id="noticeText"></span>
       <span class="notice-hint" id="noticeHint" hidden></span>
     </div>
@@ -98,28 +98,38 @@
   <!-- CONFIG ---------------------------------------------------------- -->
   <details class="config" id="configPanel" open>
     <summary>Workout</summary>
-    <div class="config-grid">
-      <label class="field field-wide">
-        <span>Intervals</span>
-        <input id="stepsInput" type="text" value="75w/60s, 230w/20s" spellcheck="false"
-               autocomplete="off">
-        <small>Watts and duration, comma separated. The pattern repeats to fill the total.</small>
-      </label>
-      <label class="field">
-        <span>Total time</span>
-        <input id="durationInput" type="text" value="10m" spellcheck="false" autocomplete="off">
-      </label>
-      <label class="field">
-        <span>FTP</span>
-        <input id="ftpInput" type="number" value="250" min="50" max="600" step="5">
-        <small>Colour only.</small>
-      </label>
-    </div>
+
+    <div class="intervals" id="intervals" role="group" aria-label="Intervals"></div>
+
+    <button class="btn btn-add" id="addInterval" type="button">
+      <span aria-hidden="true">+</span> Add interval
+    </button>
+
     <div class="config-foot">
-      <label class="check"><input type="checkbox" id="onceInput"> Run pattern once</label>
+      <label class="repeat">
+        <span>Repeat set</span>
+        <input id="repeatInput" type="number" inputmode="numeric"
+               min="1" max="99" step="1" value="7" aria-label="Repeat the set this many times">
+        <span class="repeat-x" aria-hidden="true">&times;</span>
+      </label>
       <span class="summary" id="planSummary"></span>
     </div>
+
     <p class="error" id="configError" hidden></p>
+  </details>
+
+  <details class="config">
+    <summary>Settings</summary>
+    <div class="settings">
+      <label class="field field-narrow">
+        <span>FTP</span>
+        <input id="ftpInput" type="number" inputmode="numeric" min="50" max="600" step="5" value="250">
+      </label>
+      <p class="settings-note">
+        Sets the power zones that colour each interval. It is never sent to the
+        trainer and does not affect the targets you ride.
+      </p>
+    </div>
   </details>
 
   <details class="config">

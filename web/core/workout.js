@@ -38,6 +38,14 @@ export function buildPlan(steps, total, { once = false } = {}) {
   return plan;
 }
 
+/** Play a set of intervals through N times. The UI's model of a workout. */
+export function repeatSet(steps, times) {
+  const out = [];
+  const n = Math.max(1, Math.floor(times) || 1);
+  for (let i = 0; i < n; i++) out.push(...steps.map((s) => ({ ...s })));
+  return out;
+}
+
 export function planTotal(plan) {
   return plan.reduce((a, s) => a + s.seconds, 0);
 }

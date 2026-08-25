@@ -17,8 +17,7 @@ import { FtmsBleTrainer } from './drivers/ftms-ble.js';
 import { MockTrainer } from './drivers/mock.js';
 import { RideSession } from './core/session.js';
 import {
-  parseSteps, parseDuration, buildPlan, planTotal, planWorkKj,
-  formatClock, formatDuration, zoneFor,
+  repeatSet, planTotal, planWorkKj, formatClock, formatDuration, zoneFor,
 } from './core/workout.js';
 
 const $ = (id) => document.getElementById(id);
@@ -34,8 +33,9 @@ const el = {
   nextCard: $('nextCard'), nextW: $('nextW'), nextDur: $('nextDur'), nextIn: $('nextIn'),
   profile: $('profile'), profileTotal: $('profileTotal'),
   startBtn: $('startBtn'), pauseBtn: $('pauseBtn'), stopBtn: $('stopBtn'),
-  stepsInput: $('stepsInput'), durationInput: $('durationInput'), ftpInput: $('ftpInput'),
-  onceInput: $('onceInput'), planSummary: $('planSummary'), configError: $('configError'),
+  intervals: $('intervals'), addInterval: $('addInterval'),
+  repeatInput: $('repeatInput'), ftpInput: $('ftpInput'),
+  planSummary: $('planSummary'), configError: $('configError'),
   configPanel: $('configPanel'), log: $('log'),
   notice: $('notice'), noticeTitle: $('noticeTitle'), noticeText: $('noticeText'),
   noticeHint: $('noticeHint'), noticeClose: $('noticeClose'),
@@ -55,7 +55,32 @@ const trainer = mockMode === 'gatt'
     : new FtmsBleTrainer(new WebBluetoothTransport());
 
 let session = null;
-const ui = { plan: [], ftp: 250, blocks: [], wakeLock: null };
+const ui = { plan: [], ftp: 250, blocks: [], wakeLock: null, set: [], repeat: 7 };
+
+// --- persistence ----------------------------------------------------------
+// Retyping intervals on a phone is miserable, so the set and the settings are
+// remembered. localStorage is per-origin and works in Bluefy (verified).
+const STORE = 'hammer.v1';
+
+function save() {
+  try {
+    localStorage.setItem(STORE, JSON.stringify(
+      { set: ui.set, repeat: ui.repeat, ftp: ui.ftp }));
+  } catch { /* private mode, or full — not worth surfacing */ }
+}
+
+function load() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORE) || 'null');
+    if (raw?.set?.length) {
+      ui.set = raw.set.map((s) => ({ watts: +s.watts || 0, seconds: +s.seconds || 0 }));
+      ui.repeat = +raw.repeat || 1;
+      ui.ftp = +raw.ftp || 250;
+      return true;
+    }
+  } catch { /* fall through to defaults */ }
+  return false;
+}
 
 // --- notices and logging --------------------------------------------------
 function showNotice(title, text, hint = null) {
@@ -83,14 +108,100 @@ function log(message, level = 'info') {
 
 trainer.addEventListener('log', (e) => log(e.detail.message, e.detail.level));
 
-// --- plan and profile -----------------------------------------------------
+// --- interval editor ------------------------------------------------------
+function renderIntervals() {
+  el.intervals.replaceChildren();
+  ui.set.forEach((step, i) => {
+    const mins = Math.floor(step.seconds / 60);
+    const secs = Math.round(step.seconds % 60);
+
+    const row = document.createElement('div');
+    row.className = 'interval-row';
+    row.style.setProperty('--blk', `var(--${zoneFor(step.watts, ui.ftp).key})`);
+
+    const idx = document.createElement('span');
+    idx.className = 'interval-index';
+    idx.textContent = String(i + 1);
+
+    const mk = (cls, value, label, max) => {
+      const inp = document.createElement('input');
+      inp.type = 'number';
+      inp.inputMode = 'numeric';
+      inp.className = `num ${cls}`;
+      inp.value = String(value);
+      inp.min = '0';
+      if (max != null) inp.max = String(max);
+      inp.setAttribute('aria-label', `Interval ${i + 1} ${label}`);
+      return inp;
+    };
+
+    const w = mk('num-w', step.watts, 'power in watts', 3000);
+    w.step = '5';
+    const m = mk('num-t', mins, 'minutes', 180);
+    const s = mk('num-t', secs, 'seconds', 59);
+
+    const unit = (t) => {
+      const u = document.createElement('span');
+      u.className = 'unit';
+      u.textContent = t;
+      return u;
+    };
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'row-remove';
+    del.innerHTML = '&times;';
+    del.setAttribute('aria-label', `Remove interval ${i + 1}`);
+    del.disabled = ui.set.length <= 1;
+    del.addEventListener('click', () => {
+      ui.set.splice(i, 1);
+      renderIntervals();
+      rebuildPlan();
+    });
+
+    const commit = () => {
+      const secondsTyped = Math.max(0, +s.value || 0);
+      const minutesTyped = Math.max(0, +m.value || 0);
+      // Typing 90 into seconds should mean 1m30s, not an error.
+      const total = minutesTyped * 60 + secondsTyped;
+      ui.set[i] = { watts: Math.max(0, Math.min(3000, +w.value || 0)), seconds: total };
+      rebuildPlan();
+      row.style.setProperty('--blk', `var(--${zoneFor(ui.set[i].watts, ui.ftp).key})`);
+    };
+    const normalise = () => {
+      const total = ui.set[i].seconds;
+      m.value = String(Math.floor(total / 60));
+      s.value = String(Math.round(total % 60));
+    };
+
+    for (const inp of [w, m, s]) {
+      inp.addEventListener('input', commit);
+      inp.addEventListener('blur', normalise);
+    }
+
+    row.append(idx, w, unit('W'), m, unit('m'), s, unit('s'), del);
+    el.intervals.append(row);
+  });
+}
+
+function addInterval() {
+  const last = ui.set[ui.set.length - 1];
+  ui.set.push(last ? { ...last } : { watts: 150, seconds: 60 });
+  renderIntervals();
+  rebuildPlan();
+  el.intervals.lastElementChild?.querySelector('.num-w')?.focus();
+}
+
+// --- plan and profile ------------------------------------------------------
 function rebuildPlan() {
   try {
-    const steps = parseSteps(el.stepsInput.value);
-    const once = el.onceInput.checked;
-    const total = once ? null : parseDuration(el.durationInput.value);
-    ui.plan = buildPlan(steps, total, { once });
+    ui.repeat = Math.max(1, Math.min(99, parseInt(el.repeatInput.value, 10) || 1));
     ui.ftp = Math.max(50, parseInt(el.ftpInput.value, 10) || 250);
+
+    const usable = ui.set.filter((s) => s.seconds > 0);
+    if (!usable.length) throw new Error('Give at least one interval a duration.');
+
+    ui.plan = repeatSet(usable, ui.repeat);
     el.configError.hidden = true;
     const secs = planTotal(ui.plan);
     el.planSummary.textContent =
@@ -99,6 +210,7 @@ function rebuildPlan() {
     renderProfile();
     if (!session?.running) renderIdle();
     setTransport();
+    save();
     return true;
   } catch (err) {
     el.configError.textContent = err.message;
@@ -303,16 +415,29 @@ el.pauseBtn.addEventListener('click', () => {
 el.stopBtn.addEventListener('click', () => session?.stop());
 el.noticeClose.addEventListener('click', clearNotice);
 
-for (const input of [el.stepsInput, el.durationInput, el.ftpInput]) {
-  input.addEventListener('input', () => { if (!session?.running) rebuildPlan(); });
-}
-el.onceInput.addEventListener('change', () => { if (!session?.running) rebuildPlan(); });
+el.addInterval.addEventListener('click', () => { if (!session?.running) addInterval(); });
+
+el.repeatInput.addEventListener('input', () => { if (!session?.running) rebuildPlan(); });
+
+el.ftpInput.addEventListener('input', () => {
+  if (session?.running) return;
+  rebuildPlan();
+  renderIntervals();   // zone stripes follow FTP
+});
 
 window.addEventListener('unhandledrejection', (e) => {
   log(`Unhandled: ${e.reason?.message ?? e.reason}`, 'bad');
 });
 
 // --- boot -----------------------------------------------------------------
+if (!load()) {
+  ui.set = [{ watts: 75, seconds: 60 }, { watts: 230, seconds: 20 }];
+  ui.repeat = 7;
+  ui.ftp = 250;
+}
+el.repeatInput.value = String(ui.repeat);
+el.ftpInput.value = String(ui.ftp);
+renderIntervals();
 rebuildPlan();
 setTransport();
 
