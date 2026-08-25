@@ -307,9 +307,29 @@ main {
 }
 
 .profile-block[data-state='done'] { opacity: 0.2; }
+
+/* The block you are riding breathes, so the playhead is findable from a metre
+   away without reading anything. The glow is a pseudo-element so only its
+   opacity animates -- cheap enough to run for an hour on a phone. */
 .profile-block[data-state='current'] {
   opacity: 1;
-  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--blk) 55%, transparent));
+  position: relative;
+  z-index: 1;
+}
+
+.profile-block[data-state='current']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--blk);
+  box-shadow: 0 0 14px 2px var(--blk);
+  animation: blockPulse 1.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes blockPulse {
+  0%, 100% { opacity: 0.12; }
+  50%      { opacity: 0.95; }
 }
 
 .profile-axis {
@@ -718,6 +738,11 @@ main {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+  /* Freezing the pulse would leave the current block at its dimmest frame. */
+  .profile-block[data-state='current']::after {
+    animation: none !important;
+    opacity: 0.7;
   }
 }
 
