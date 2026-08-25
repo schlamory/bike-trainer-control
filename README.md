@@ -132,6 +132,13 @@ Open the live URL in Bluefy and bookmark it, or point an iOS Shortcut at a
 re-running after any Bluefy update:
 <https://schlamory.github.io/bike-trainer-control/diagnostics.html>
 
+Its **Display** section answers whether the borderless view actually engaged:
+it reports which `display-mode` matches, how much height browser chrome is
+taking, and whether the manifest loaded with raster icons. Bluefy is documented
+to render a PWA-compliant site borderless when the manifest declares
+`"display": "standalone"` — the app satisfies that, but whether Bluefy honours
+it is Bluefy's behaviour, and this is how to check.
+
 To get an *unpushed* change onto the phone, tunnel the local server:
 
 ```sh

@@ -85,9 +85,54 @@
     check('Browser', 'Secure context', window.isSecureContext ? 'pass' : 'fail',
       'isSecureContext = ' + window.isSecureContext + '   origin ' + location.origin);
 
-    var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+    // --- display mode -----------------------------------------------------
+    var modes = ['fullscreen', 'standalone', 'minimal-ui', 'browser'];
+    var active = modes.filter(function (m) {
+      return window.matchMedia && window.matchMedia('(display-mode: ' + m + ')').matches;
+    });
+    var borderless = active.indexOf('fullscreen') !== -1 || active.indexOf('standalone') !== -1
       || navigator.standalone === true;
-    check('Browser', 'Running as an installed app', 'info', 'standalone = ' + standalone);
+    check('Display', 'Borderless (full-screen) view', borderless ? 'pass' : 'warn',
+      'display-mode matches: ' + (active.join(', ') || 'none')
+      + '   navigator.standalone = ' + navigator.standalone);
+
+    // Browser chrome eats height; comparing to the screen shows how much.
+    var lost = Math.max(0, screen.height - window.innerHeight);
+    check('Display', 'Viewport height', 'info',
+      'inner ' + window.innerHeight + ' of screen ' + screen.height
+      + '  (' + lost + 'px taken by chrome)');
+
+    var probe = document.createElement('div');
+    probe.style.cssText = 'position:fixed;top:0;height:env(safe-area-inset-top);';
+    document.body.appendChild(probe);
+    check('Display', 'Safe-area inset honoured', 'info',
+      'top inset = ' + getComputedStyle(probe).height);
+    probe.remove();
+
+    // --- manifest ---------------------------------------------------------
+    var link = document.querySelector('link[rel=manifest]');
+    check('Display', 'Manifest link present', link ? 'pass' : 'fail',
+      link ? 'resolves to ' + link.href : 'no <link rel=manifest> in the document');
+    if (link) {
+      fetch(link.href).then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      }).then(function (m) {
+        var icons = (m.icons || []).map(function (i) { return i.sizes + ' ' + i.type; });
+        check('Display', 'Manifest fetched and parsed', 'pass',
+          'display = ' + m.display
+          + '   display_override = ' + JSON.stringify(m.display_override || null)
+          + '   icons: ' + icons.join(' | '));
+        var raster = (m.icons || []).some(function (i) {
+          return i.type === 'image/png' && /(^|\D)(192|512)x/.test(i.sizes || '');
+        });
+        check('Display', 'Raster icons at 192/512', raster ? 'pass' : 'warn',
+          raster ? 'present' : 'PWA detection usually needs PNG icons at these sizes');
+      }).catch(function (e) {
+        check('Display', 'Manifest fetched and parsed', 'fail',
+          errText(e) + ' — a manifest that will not load means no PWA behaviour');
+      });
+    }
 
     var bt = navigator.bluetooth;
     facts.hasBluetooth = !!bt;
