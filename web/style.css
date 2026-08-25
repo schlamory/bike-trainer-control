@@ -462,8 +462,8 @@ main {
 .num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .num:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
 
-.num-w { flex: 1 1 4.5rem; }
-.num-t { flex: 1 1 3rem; }
+.num-w { flex: 1 1 5rem; }
+.num-t { flex: 1 1 5rem; }
 
 .unit {
   font-size: 0.72rem;

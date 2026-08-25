@@ -207,9 +207,6 @@ trainer.addEventListener('log', (e) => log(e.detail.message, e.detail.level));
 function renderIntervals() {
   el.intervals.replaceChildren();
   ui.set.forEach((step, i) => {
-    const mins = Math.floor(step.seconds / 60);
-    const secs = Math.round(step.seconds % 60);
-
     const row = document.createElement('div');
     row.className = 'interval-row';
     row.style.setProperty('--blk', `var(--${zoneFor(step.watts, ui.ftp).key})`);
@@ -225,15 +222,14 @@ function renderIntervals() {
       inp.className = `num ${cls}`;
       inp.value = String(value);
       inp.min = '0';
-      if (max != null) inp.max = String(max);
+      inp.max = String(max);
       inp.setAttribute('aria-label', `Interval ${i + 1} ${label}`);
       return inp;
     };
 
     const w = mk('num-w', step.watts, 'power in watts', 3000);
     w.step = '5';
-    const m = mk('num-t', mins, 'minutes', 180);
-    const s = mk('num-t', secs, 'seconds', 59);
+    const s = mk('num-t', Math.round(step.seconds), 'duration in seconds', 7200);
 
     const unit = (t) => {
       const u = document.createElement('span');
@@ -254,27 +250,15 @@ function renderIntervals() {
       rebuildPlan();
     });
 
+    const clamp = (v, hi) => Math.max(0, Math.min(hi, Math.round(+v) || 0));
     const commit = () => {
-      const secondsTyped = Math.max(0, +s.value || 0);
-      const minutesTyped = Math.max(0, +m.value || 0);
-      // Typing 90 into seconds should mean 1m30s, not an error.
-      const total = minutesTyped * 60 + secondsTyped;
-      ui.set[i] = { watts: Math.max(0, Math.min(3000, +w.value || 0)), seconds: total };
+      ui.set[i] = { watts: clamp(w.value, 3000), seconds: clamp(s.value, 7200) };
       rebuildPlan();
       row.style.setProperty('--blk', `var(--${zoneFor(ui.set[i].watts, ui.ftp).key})`);
     };
-    const normalise = () => {
-      const total = ui.set[i].seconds;
-      m.value = String(Math.floor(total / 60));
-      s.value = String(Math.round(total % 60));
-    };
+    for (const inp of [w, s]) inp.addEventListener('input', commit);
 
-    for (const inp of [w, m, s]) {
-      inp.addEventListener('input', commit);
-      inp.addEventListener('blur', normalise);
-    }
-
-    row.append(idx, w, unit('W'), m, unit('m'), s, unit('s'), del);
+    row.append(idx, w, unit('W'), s, unit('s'), del);
     el.intervals.append(row);
   });
 }
