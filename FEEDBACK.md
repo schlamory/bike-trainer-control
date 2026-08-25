@@ -3,7 +3,7 @@
 A working doc. Newest decisions at the top of each section; strike things out
 rather than deleting them, so the reasoning stays visible.
 
-Last updated: 24 August 2026 (Bluefy verified)
+Last updated: 25 August 2026
 
 ---
 
@@ -43,7 +43,7 @@ What is actually achievable, in descending order of niceness:
 | Approach | Feels like | Reality |
 | --- | --- | --- |
 | Bookmark inside Bluefy | Two taps: open Bluefy, tap bookmark | Works today, assuming Bluefy's shim is adequate **[Test it]** |
-| iOS Shortcut on the home screen that opens the URL in Bluefy | One tap from the home screen, looks like an app | Needs Bluefy's URL scheme to exist and accept a target URL **[Test it]** |
+| iOS Shortcut on the home screen that opens the URL in Bluefy | One tap from the home screen, looks like an app | **Working.** This is the launch path in use |
 | Native app wrapping WKWebView + CoreBluetooth | A real app | Rebuilds Bluefy. Only worth it if the shim fails |
 | ~~Safari PWA + Web Bluetooth~~ | — | Impossible. Not a matter of effort |
 
@@ -309,10 +309,23 @@ If it does enforce it, in order of effort:
    browser. Ride an hour with the screen locking and see whether GATT holds.
    The app calls both `navigator.wakeLock` and Bluefy's proprietary
    `setScreenDimEnabled`, so instrument which one actually fires.
-6. **Home-screen launch.** Now unblocked by the stable Pages URL. Find out
-   whether Bluefy registers a URL scheme; if it does, an iOS Shortcut pointing
-   at the Pages address gives a one-tap home-screen icon. This is the closest
-   thing to a real PWA install that iOS allows for a BLE app.
+6. ~~**Home-screen launch.**~~ **Done.** An iOS Shortcut pointing at a
+   `/workout/<slug>` address gives a one-tap home-screen launch into Bluefy.
+
+7. ~~**Full-screen on launch.**~~ **Not achievable; out of scope.** Bluefy
+   3.9.3 / iOS 18.7 does not render a PWA-compliant page borderless: with a
+   valid manifest, `"display": "standalone"` and PNG icons at 192/512 all
+   served, it still reports `display-mode: browser` with ~210 px of chrome.
+   There is no page-side lever either — iPhone WKWebView has no Fullscreen API.
+
+   Mitigated rather than solved: **focus mode** hides the header and workout
+   panels while a ride is running, so the instrument fills whatever viewport
+   Bluefy leaves. The workaround in practice is to leave the tab selected in
+   Bluefy so it opens straight into it.
+
+   Worth re-testing after a Bluefy update — `diagnostics.html` now reports
+   display-mode, chrome height, the Fullscreen API and vendor hooks, so it is
+   a re-run rather than an investigation.
 
 ---
 
@@ -377,6 +390,9 @@ If it does enforce it, in order of effort:
   same code, and the only variable is the browser's BLE shim.
 - **2026-08-24** — Service worker is network-first, not cache-first. Cache-first
   stranded the browser on a stale build during development.
+- **2026-08-25** — Full-screen on iOS abandoned after measurement, not
+  assumption. The manifest work is kept anyway: it fixes the home-screen icon,
+  since iOS ignores an SVG `apple-touch-icon` outright.
 - **2026-08-24** — Hosted on GitHub Pages, deployed by Actions from `web/`.
   Chosen over a personal server because it is free, needs no maintenance, and
   the repo has nothing sensitive in it. Keeping `web/` where it is rather than
