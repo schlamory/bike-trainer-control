@@ -390,6 +390,17 @@ If it does enforce it, in order of effort:
   same code, and the only variable is the browser's BLE shim.
 - **2026-08-24** — Service worker is network-first, not cache-first. Cache-first
   stranded the browser on a stale build during development.
+- **2026-08-25** — The ride clock is wall-clock, not tick-counted: a
+  backgrounded page catches up in one step instead of the workout running long.
+  Measured: a 30 s suspension advances elapsed by 31 s and skips the intervals
+  it spanned, which never reach the trainer; away longer than the remaining
+  workout and it completes the moment you return.
+
+  Kept deliberately. Freezing the clock on hide would complete all the
+  prescribed work, but a glance at a notification would drop resistance
+  mid-effort, and the resulting behaviour is harder to predict. Predictable
+  beats complete here. The one change made was to log any gap over 3 s, so the
+  skip is visible rather than silent.
 - **2026-08-25** — Full-screen on iOS abandoned after measurement, not
   assumption. The manifest work is kept anyway: it fixes the home-screen icon,
   since iOS ignores an SVG `apple-touch-icon` outright.

@@ -20,6 +20,10 @@ const TICK_MS = 100;          // UI smoothness; control decisions are 1 Hz
 const KEEPALIVE_MS = 10_000;  // rewrite an unchanged target periodically
 const KEEPALIVE_MIN_STEP_S = 20;
 
+// A tick gap longer than this means the page was suspended rather than merely
+// busy -- worth telling the rider about, since the clock will have caught up.
+const GAP_NOTICE_S = 3;
+
 export class RideSession extends Emitter {
   /**
    * @param {import('./contracts.js').TrainerController} controller
@@ -112,8 +116,18 @@ export class RideSession extends Emitter {
     if (!this.running || this.paused) return;
 
     const now = performance.now();
-    this.elapsed += (now - this._lastTickAt) / 1000;
+    const delta = (now - this._lastTickAt) / 1000;
+    this.elapsed += delta;
     this._lastTickAt = now;
+
+    // The clock is wall-clock, not tick-counted: a backgrounded page catches
+    // up in one step rather than the workout running long. That is the
+    // intended behaviour -- it just needs to be visible, because the intervals
+    // spanned by the gap are skipped without ever being sent to the trainer.
+    if (delta > GAP_NOTICE_S) {
+      this.log(`Skipped ${Math.round(delta)}s — the app was in the background. `
+        + 'The workout stays on its original schedule.', 'warn');
+    }
 
     const pos = locate(this.plan, this.elapsed);
     if (!pos) {

@@ -66,6 +66,16 @@ response *and* the `0x2ADA` status echo of the exact wattage — retrying up to
 four times if either is missing. That is the workaround for the H3's
 occasional refusal to change target.
 
+If you leave the app mid-ride, the clock keeps **wall-clock** time rather than
+pausing: it catches up in one step when you return, so a 30-second detour costs
+30 seconds *of* the workout rather than adding 30 seconds *to* it. Intervals
+spanned by the gap are skipped and never sent to the trainer, which holds its
+last target until you come back. A gap over 3 seconds is reported in the
+Activity log so this is visible rather than silent.
+
+Chosen for predictability over completeness — see the decision log in
+`FEEDBACK.md`.
+
 When a ride ends, by finishing or by **End ride**, the trainer is set to the
 lowest wattage the workout contained rather than left holding the last
 interval. Finishing on a hard effort would otherwise leave full resistance on
