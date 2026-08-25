@@ -14,6 +14,29 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<script>
+// The document is always served at the base -- directly, or via the bounce in
+// 404.html. Pin that as <base> BEFORE any history rewriting, because
+// replaceState/pushState change the document URL that relative src and href
+// attributes resolve against: without this, /workout/<name> would look for
+// app.js at /workout/app.js.
+(function () {
+  var base = location.pathname.replace(/index\.html$/, '');
+  var tag = document.createElement('base');
+  tag.href = base;
+  document.head.insertBefore(tag, document.head.firstChild);
+
+  // Restore the pretty URL after a bounce from 404.html.
+  var params = new URLSearchParams(location.search);
+  var p = params.get('p');
+  if (!p) return;
+  params.delete('p');
+  var extra = params.toString();
+  var restored = base.replace(/\/$/, '') + p;
+  if (extra) restored += '?' + extra;
+  history.replaceState(null, '', restored);
+})();
+</script>
 </head>
 <body>
 
@@ -98,6 +121,18 @@
   <!-- CONFIG ---------------------------------------------------------- -->
   <details class="config" id="configPanel" open>
     <summary>Workout</summary>
+
+    <div class="picker">
+      <select id="workoutPicker" aria-label="Choose a workout"></select>
+      <div class="picker-name">
+        <input id="workoutName" type="text" maxlength="60" spellcheck="false"
+               autocomplete="off" placeholder="Name this workout"
+               aria-label="Workout name">
+        <button class="btn btn-save" id="saveWorkout" type="button">Save</button>
+        <button class="btn btn-danger btn-del" id="deleteWorkout" type="button" hidden>Delete</button>
+      </div>
+      <p class="picker-note" id="pickerNote"></p>
+    </div>
 
     <div class="intervals" id="intervals" role="group" aria-label="Intervals"></div>
 

@@ -4,7 +4,8 @@
 const CACHE = 'hammer-v1';
 const SHELL = [
   '.', 'index.html', 'style.css', 'app.js', 'manifest.json', 'icon.svg',
-  'core/contracts.js', 'core/workout.js', 'core/session.js',
+  'core/contracts.js', 'core/workout.js', 'core/workouts.js', 'core/session.js',
+  '404.html',
   'drivers/ftms.js', 'drivers/ftms-ble.js', 'drivers/mock.js',
   'transport/web-bluetooth.js', 'transport/mock-gatt.js',
   'diagnostics.html', 'diagnostics.js', 'diagnostics.css',

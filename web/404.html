@@ -1,0 +1,28 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Hammer</title>
+<!--
+  GitHub Pages has no server-side routing, so a request for /workout/<name>
+  lands here. Bounce it to the app with the route in the query string; the app
+  restores the pretty URL with replaceState, so the address bar ends up correct
+  and the entry is bookmarkable.
+
+  Only ever runs on Pages: serve.py falls back to index.html locally.
+-->
+<script>
+(function () {
+  var p = window.location.pathname;
+  // Project pages live under /<repo>/; user pages do not.
+  var keep = /\.github\.io$/.test(window.location.hostname) ? 1 : 0;
+  var parts = p.split('/').filter(Boolean);
+  var base = '/' + parts.slice(0, keep).join('/') + (keep ? '/' : '');
+  var route = '/' + parts.slice(keep).join('/');
+  // Keep the route and any real query params separate; the app reassembles
+  // them. Folding one into the other loses the '?' on the way back.
+  var qs = window.location.search.replace(/^\?/, '');
+  window.location.replace(
+    base + '?p=' + encodeURIComponent(route) + (qs ? '&' + qs : '')
+    + window.location.hash);
+})();
+</script>
+<noscript>This app needs JavaScript. <a href="../">Open Hammer</a>.</noscript>

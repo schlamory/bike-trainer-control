@@ -19,6 +19,7 @@ import { RideSession } from './core/session.js';
 import {
   repeatSet, planTotal, planWorkKj, formatClock, formatDuration, zoneFor,
 } from './core/workout.js';
+import * as Workouts from './core/workouts.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -33,6 +34,9 @@ const el = {
   nextCard: $('nextCard'), nextW: $('nextW'), nextDur: $('nextDur'), nextIn: $('nextIn'),
   profile: $('profile'), profileTotal: $('profileTotal'),
   startBtn: $('startBtn'), pauseBtn: $('pauseBtn'), stopBtn: $('stopBtn'),
+  workoutPicker: $('workoutPicker'), workoutName: $('workoutName'),
+  saveWorkout: $('saveWorkout'), deleteWorkout: $('deleteWorkout'),
+  pickerNote: $('pickerNote'),
   intervals: $('intervals'), addInterval: $('addInterval'),
   repeatInput: $('repeatInput'), ftpInput: $('ftpInput'),
   planSummary: $('planSummary'), configError: $('configError'),
@@ -55,7 +59,33 @@ const trainer = mockMode === 'gatt'
     : new FtmsBleTrainer(new WebBluetoothTransport());
 
 let session = null;
-const ui = { plan: [], ftp: 250, blocks: [], wakeLock: null, set: [], repeat: 7 };
+const ui = {
+  plan: [], ftp: 250, blocks: [], wakeLock: null,
+  set: [], repeat: 7, slug: null, name: '',
+};
+
+// --- routing --------------------------------------------------------------
+// Pretty paths on static hosting: /workout/<slug>. See 404.html and serve.py.
+//
+// The base is derived from this module's own URL rather than location.pathname,
+// which is only the base once 404.html has bounced us there. This is correct
+// however the page was reached.
+const BASE = new URL('.', import.meta.url).pathname;
+
+function routeSlug() {
+  const rest = location.pathname.startsWith(BASE)
+    ? location.pathname.slice(BASE.length)
+    : '';
+  const m = rest.replace(/^\//, '').match(/^workout\/([^/?#]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+function setRoute(slug, { replace = false } = {}) {
+  const url = slug ? `${BASE}workout/${encodeURIComponent(slug)}` : BASE;
+  const full = url + location.search + location.hash;
+  if (location.pathname === url) return;
+  history[replace ? 'replaceState' : 'pushState']({ slug }, '', full);
+}
 
 // --- persistence ----------------------------------------------------------
 // Retyping intervals on a phone is miserable, so the set and the settings are
@@ -65,7 +95,7 @@ const STORE = 'hammer.v1';
 function save() {
   try {
     localStorage.setItem(STORE, JSON.stringify(
-      { set: ui.set, repeat: ui.repeat, ftp: ui.ftp }));
+      { set: ui.set, repeat: ui.repeat, ftp: ui.ftp, slug: ui.slug, name: ui.name }));
   } catch { /* private mode, or full — not worth surfacing */ }
 }
 
@@ -76,10 +106,75 @@ function load() {
       ui.set = raw.set.map((s) => ({ watts: +s.watts || 0, seconds: +s.seconds || 0 }));
       ui.repeat = +raw.repeat || 1;
       ui.ftp = +raw.ftp || 250;
+      ui.slug = raw.slug ?? null;
+      ui.name = raw.name ?? '';
       return true;
     }
   } catch { /* fall through to defaults */ }
   return false;
+}
+
+// --- named workouts -------------------------------------------------------
+function renderPicker() {
+  const { saved, presets } = Workouts.list();
+  el.workoutPicker.replaceChildren();
+
+  const opt = (w, label) => {
+    const o = document.createElement('option');
+    o.value = w.slug;
+    o.textContent = label ?? w.name;
+    return o;
+  };
+
+  if (saved.length) {
+    const g = document.createElement('optgroup');
+    g.label = 'Saved';
+    saved.forEach((w) => g.append(opt(w)));
+    el.workoutPicker.append(g);
+  }
+  if (presets.length) {
+    const g = document.createElement('optgroup');
+    g.label = 'Built in';
+    presets.forEach((w) => g.append(opt(w)));
+    el.workoutPicker.append(g);
+  }
+
+  const unsaved = document.createElement('option');
+  unsaved.value = '';
+  unsaved.textContent = ui.slug ? 'Unsaved changes' : 'Unsaved workout';
+  el.workoutPicker.append(unsaved);
+
+  const current = Workouts.get(ui.slug);
+  const clean = Workouts.matches(current, ui.set, ui.repeat);
+  el.workoutPicker.value = clean ? ui.slug : '';
+  el.deleteWorkout.hidden = !(current?.saved && clean);
+
+  if (ui.slug && !clean) {
+    note(`Edited from “${current?.name ?? ui.slug}”. Save to keep the changes.`);
+  } else if (current && !current.saved) {
+    note('Built-in workout. Saving makes an editable copy.');
+  } else {
+    note('');
+  }
+}
+
+function note(text, level = '') {
+  el.pickerNote.textContent = text;
+  el.pickerNote.dataset.level = level;
+}
+
+function applyWorkout(w, { push = true } = {}) {
+  if (!w) return false;
+  ui.set = w.set.map((s) => ({ ...s }));
+  ui.repeat = w.repeat;
+  ui.slug = w.slug;
+  ui.name = w.name;
+  el.repeatInput.value = String(ui.repeat);
+  el.workoutName.value = ui.name;
+  renderIntervals();
+  rebuildPlan();
+  setRoute(w.slug, { replace: !push });
+  return true;
 }
 
 // --- notices and logging --------------------------------------------------
@@ -204,13 +299,15 @@ function rebuildPlan() {
     ui.plan = repeatSet(usable, ui.repeat);
     el.configError.hidden = true;
     const secs = planTotal(ui.plan);
+    const n = ui.plan.length;
     el.planSummary.textContent =
-      `${ui.plan.length} intervals · ${formatDuration(secs)} · ${planWorkKj(ui.plan).toFixed(1)} kJ`;
+      `${n} interval${n === 1 ? '' : 's'} · ${formatDuration(secs)} · ${planWorkKj(ui.plan).toFixed(1)} kJ`;
     el.profileTotal.textContent = formatDuration(secs);
     renderProfile();
     if (!session?.running) renderIdle();
     setTransport();
     save();
+    renderPicker();
     return true;
   } catch (err) {
     el.configError.textContent = err.message;
@@ -415,6 +512,50 @@ el.pauseBtn.addEventListener('click', () => {
 el.stopBtn.addEventListener('click', () => session?.stop());
 el.noticeClose.addEventListener('click', clearNotice);
 
+el.workoutPicker.addEventListener('change', () => {
+  if (session?.running) return;
+  const slug = el.workoutPicker.value;
+  if (!slug) { renderPicker(); return; }      // "unsaved" is a label, not a destination
+  applyWorkout(Workouts.get(slug));
+});
+
+el.saveWorkout.addEventListener('click', () => {
+  const name = el.workoutName.value.trim();
+  if (!name) {
+    note('Give the workout a name first.', '');
+    el.workoutName.focus();
+    return;
+  }
+  const saved = Workouts.save({ name, set: ui.set, repeat: ui.repeat });
+  if (!saved) { note('Could not save — browser storage is unavailable.'); return; }
+  ui.slug = saved.slug;
+  ui.name = saved.name;
+  setRoute(saved.slug);
+  save();
+  renderPicker();
+  note(`Saved “${saved.name}”.`, 'good');
+});
+
+el.deleteWorkout.addEventListener('click', () => {
+  if (!ui.slug) return;
+  const gone = ui.name;
+  Workouts.remove(ui.slug);
+  ui.slug = null;
+  setRoute(null);
+  save();
+  renderPicker();
+  note(`Deleted “${gone}”. The intervals are still loaded.`);
+});
+
+el.workoutName.addEventListener('input', () => { ui.name = el.workoutName.value; save(); });
+
+window.addEventListener('popstate', () => {
+  if (session?.running) return;
+  const slug = routeSlug();
+  const w = slug ? Workouts.get(slug) : null;
+  if (w) applyWorkout(w, { push: false });
+});
+
 el.addInterval.addEventListener('click', () => { if (!session?.running) addInterval(); });
 
 el.repeatInput.addEventListener('input', () => { if (!session?.running) rebuildPlan(); });
@@ -430,15 +571,37 @@ window.addEventListener('unhandledrejection', (e) => {
 });
 
 // --- boot -----------------------------------------------------------------
-if (!load()) {
-  ui.set = [{ watts: 75, seconds: 60 }, { watts: 230, seconds: 20 }];
-  ui.repeat = 7;
+const restored = load();
+const routed = routeSlug() ? Workouts.get(routeSlug()) : null;
+
+if (routed) {
+  // A /workout/<slug> URL is an explicit request; it beats the last-used state.
+  ui.set = routed.set.map((s) => ({ ...s }));
+  ui.repeat = routed.repeat;
+  ui.slug = routed.slug;
+  ui.name = routed.name;
+} else if (!restored) {
+  const first = Workouts.PRESETS[0];
+  ui.set = first.set.map((s) => ({ ...s }));
+  ui.repeat = first.repeat;
+  ui.slug = first.slug;
+  ui.name = first.name;
   ui.ftp = 250;
 }
+
+// Held until after the first render, which rebuilds the picker and its note.
+const bootNote = (!routed && routeSlug())
+  ? `No workout called “${routeSlug()}”. Showing the last one you used.`
+  : null;
+if (bootNote) setRoute(ui.slug, { replace: true });
+
 el.repeatInput.value = String(ui.repeat);
 el.ftpInput.value = String(ui.ftp);
+el.workoutName.value = ui.name;
 renderIntervals();
 rebuildPlan();
+if (ui.slug && !routed && !bootNote) setRoute(ui.slug, { replace: true });
+if (bootNote) note(bootNote);
 setTransport();
 
 if (useMock) {
@@ -453,8 +616,12 @@ if (!useMock && !new WebBluetoothTransport().isAvailable()) {
 }
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(() => { /* absent in Bluefy */ });
+  // Explicit base: the page may be at /workout/<slug>, where 'sw.js' would miss.
+  navigator.serviceWorker.register(`${BASE}sw.js`, { scope: BASE })
+    .catch(() => { /* absent in Bluefy */ });
 }
 
 // Handy from the console.
-window.hammer = { trainer, get session() { return session; }, ui, rebuildPlan };
+window.hammer = {
+  trainer, get session() { return session; }, ui, rebuildPlan, Workouts, applyWorkout,
+};

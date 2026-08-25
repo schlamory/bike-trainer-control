@@ -380,6 +380,44 @@ main {
 .config > summary::before { content: '▸ '; color: var(--faint); }
 .config[open] > summary::before { content: '▾ '; }
 
+/* Workout picker */
+.picker { margin-top: 0.9rem; display: flex; flex-direction: column; gap: 0.5rem; }
+
+.picker select {
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.6rem 0.7rem;
+  min-height: 44px;
+  width: 100%;
+}
+.picker select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.picker-name { display: flex; gap: 0.4rem; }
+
+.picker-name input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+  color: var(--text);
+  background: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.6rem 0.7rem;
+  min-height: 44px;
+}
+.picker-name input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+
+.btn-save, .btn-del { flex: none; min-height: 44px; padding: 0.6rem 1rem; font-size: 0.85rem; }
+
+.picker-note { margin: 0; font-size: 0.75rem; color: var(--faint); min-height: 1.1em; }
+.picker-note[data-level='good'] { color: var(--z2); }
+
 /* Interval rows: numeric inputs sized for thumbs, not a text grammar. */
 .intervals { margin-top: 0.9rem; display: flex; flex-direction: column; gap: 0.5rem; }
 

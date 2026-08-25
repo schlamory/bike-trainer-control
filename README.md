@@ -68,6 +68,31 @@ Two seams, so the core knows about neither the browser nor the trainer:
 Swapping either seam is why an ANT+ FE-C bridge or a non-browser host could be
 added without touching the workout logic.
 
+### Named workouts
+
+Workouts live at `/workout/<slug>`, so a ride can be bookmarked or wired to an
+iOS Shortcut:
+
+```
+https://schlamory.github.io/bike-trainer-control/workout/sprints
+https://schlamory.github.io/bike-trainer-control/workout/vo2-30-30
+```
+
+Four presets ship in `web/core/workouts.js` (`sprints`, `vo2-30-30`,
+`threshold-2x10`, `recovery`), sized around a 250 W FTP. Editing one and
+pressing Save stores an editable copy under its own slug; saved workouts shadow
+a preset of the same name and appear above them in the picker.
+
+Saved workouts live in `localStorage` — chosen over `sessionStorage`, which is
+wiped when the tab closes. That makes them per-browser convenience rather than
+durable storage: clearing site data loses them, while the presets are code and
+always come back.
+
+GitHub Pages has no server-side routing, so `404.html` bounces `/workout/<name>`
+to the app, which restores the pretty URL. `serve.py` does the same locally
+rather than serving `index.html` in place — that shortcut would break every
+relative asset, since they would resolve against `/workout/`.
+
 ### Running without hardware
 
 ```

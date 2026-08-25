@@ -13,6 +13,7 @@ import argparse
 import errno
 import functools
 import http.server
+import os
 import socketserver
 import webbrowser
 from pathlib import Path
@@ -34,6 +35,20 @@ def lan_ip() -> str:
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
+    def send_head(self):
+        """Serve 404.html for unknown paths, exactly as GitHub Pages does.
+
+        Serving index.html directly at /workout/<name> would be simpler but
+        wrong: every relative asset would resolve against /workout/, so
+        style.css would 404. The redirect in 404.html exists precisely to get
+        the document loaded at the base, and local dev must exercise the same
+        path or it tests something production never does.
+        """
+        path = self.translate_path(self.path.split('?', 1)[0])
+        if not os.path.exists(path):
+            self.path = '/404.html'
+        return super().send_head()
+
     def end_headers(self):
         # No caching, so an edit shows up on reload during development.
         self.send_header("Cache-Control", "no-store")
