@@ -19,7 +19,8 @@
 
   var el = function (id) { return document.getElementById(id); };
   var results = el('results');
-  var lines = [];
+  var stamp = new Date().toISOString();
+  var verdictText = '';
   var groups = {};
   var facts = {};
 
@@ -33,7 +34,6 @@
     g.appendChild(h);
     results.appendChild(g);
     groups[title] = g;
-    lines.push('', '## ' + title);
     return g;
   }
 
@@ -59,13 +59,30 @@
     row.appendChild(m);
     row.appendChild(l);
     g.appendChild(row);
-    lines.push('[' + (result === 'pass' ? 'PASS' : result === 'fail' ? 'FAIL'
-      : result === 'warn' ? 'WARN' : 'info') + '] ' + label + (detail ? '\n        ' + detail : ''));
     syncReport();
     return row;
   }
 
-  function syncReport() { el('reportText').value = lines.join('\n'); }
+  /**
+   * Rebuild the copyable report from the DOM rather than appending as checks
+   * run. Async checks resolve out of order, so an appended log put them under
+   * whichever group happened to be current -- the text disagreed with the page.
+   */
+  function syncReport() {
+    var out = ['HAMMER BLUETOOTH DIAGNOSTICS', stamp];
+    Array.prototype.forEach.call(document.querySelectorAll('.group'), function (g) {
+      out.push('', '## ' + g.querySelector('.group-title').textContent);
+      Array.prototype.forEach.call(g.querySelectorAll('.check-row'), function (row) {
+        var r = row.dataset.r;
+        var tag = r === 'pass' ? 'PASS' : r === 'fail' ? 'FAIL' : r === 'warn' ? 'WARN' : 'info';
+        var label = row.querySelector('.check-label').firstChild.textContent;
+        var detail = row.querySelector('.check-detail');
+        out.push('[' + tag + '] ' + label + (detail ? '\n        ' + detail.textContent : ''));
+      });
+    });
+    if (verdictText) out.push('', '## VERDICT', verdictText);
+    el('reportText').value = out.join('\n');
+  }
 
   function hex(dv) {
     var out = [];
@@ -79,8 +96,6 @@
 
   // ---- environment -------------------------------------------------------
   function runEnvironment() {
-    lines.push('HAMMER BLUETOOTH DIAGNOSTICS', new Date().toISOString());
-
     check('Browser', 'User agent', 'info', navigator.userAgent);
     check('Browser', 'Secure context', window.isSecureContext ? 'pass' : 'fail',
       'isSecureContext = ' + window.isSecureContext + '   origin ' + location.origin);
@@ -108,6 +123,29 @@
     check('Display', 'Safe-area inset honoured', 'info',
       'top inset = ' + getComputedStyle(probe).height);
     probe.remove();
+
+    // Is there any page-side lever for full screen at all?
+    var el0 = document.documentElement;
+    var fsApi = ['requestFullscreen', 'webkitRequestFullscreen', 'webkitRequestFullScreen']
+      .filter(function (m) { return typeof el0[m] === 'function'; });
+    check('Display', 'Fullscreen API', fsApi.length ? 'pass' : 'warn',
+      fsApi.length ? fsApi.join(', ')
+        : 'absent — iPhone WKWebView has no Fullscreen API, so the page cannot ask');
+
+    // Bluefy exposes proprietary hooks; look for anything relevant.
+    var hooks = [];
+    ['bluefy', 'webkit', 'BluefyNative'].forEach(function (k) {
+      if (window[k]) hooks.push(k);
+    });
+    if (window.webkit && window.webkit.messageHandlers) {
+      hooks.push('webkit.messageHandlers: ' + Object.keys(window.webkit.messageHandlers).join(','));
+    }
+    var navExtras = Object.keys(navigator).filter(function (k) {
+      return /full|screen|chrome|toolbar|dim/i.test(k);
+    });
+    check('Display', 'Vendor hooks', hooks.length || navExtras.length ? 'info' : 'warn',
+      'window: ' + (hooks.join(' | ') || 'none')
+      + '   navigator: ' + (navExtras.join(', ') || 'none'));
 
     // --- manifest ---------------------------------------------------------
     var link = document.querySelector('link[rel=manifest]');
@@ -430,7 +468,7 @@
     v.dataset.level = level;
     title.textContent = t;
     body.textContent = b;
-    lines.push('', '## VERDICT', t, b);
+    verdictText = t + '\n' + b;
     syncReport();
     el('copyBtn').disabled = false;
     el('runNote').textContent = 'Done. Copy the report and send it over.';

@@ -41,6 +41,7 @@ const el = {
   sets: $('sets'), addSet: $('addSet'), ftpInput: $('ftpInput'),
   planSummary: $('planSummary'), configError: $('configError'),
   configPanel: $('configPanel'), log: $('log'),
+  revealBtn: $('revealBtn'),
   notice: $('notice'), noticeTitle: $('noticeTitle'), noticeText: $('noticeText'),
   noticeHint: $('noticeHint'), noticeClose: $('noticeClose'),
 };
@@ -552,6 +553,9 @@ function buildSession() {
 
 function setTransport() {
   const running = !!session?.running;
+  // Focus mode: hide everything that is not the instrument while riding.
+  if (running) document.body.dataset.riding = '1';
+  else delete document.body.dataset.riding;
   const paused = !!session?.paused;
   el.startBtn.disabled = running || !trainer.connected || !ui.plan.length;
   el.pauseBtn.disabled = !running;
@@ -656,6 +660,13 @@ el.pauseBtn.addEventListener('click', () => {
 
 el.stopBtn.addEventListener('click', () => session?.stop());
 el.noticeClose.addEventListener('click', clearNotice);
+
+// Peek at the header and panels mid-ride without ending anything.
+el.revealBtn.addEventListener('click', () => {
+  const hidden = document.body.dataset.riding === '1';
+  if (hidden) delete document.body.dataset.riding;
+  else if (session?.running) document.body.dataset.riding = '1';
+});
 
 el.workoutPicker.addEventListener('change', () => {
   if (session?.running) return;

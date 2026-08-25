@@ -132,12 +132,19 @@ Open the live URL in Bluefy and bookmark it, or point an iOS Shortcut at a
 re-running after any Bluefy update:
 <https://schlamory.github.io/bike-trainer-control/diagnostics.html>
 
-Its **Display** section answers whether the borderless view actually engaged:
-it reports which `display-mode` matches, how much height browser chrome is
-taking, and whether the manifest loaded with raster icons. Bluefy is documented
-to render a PWA-compliant site borderless when the manifest declares
-`"display": "standalone"` — the app satisfies that, but whether Bluefy honours
-it is Bluefy's behaviour, and this is how to check.
+Its **Display** section reports which `display-mode` matches, how much height
+browser chrome is taking, and whether the manifest loaded with raster icons.
+
+**Bluefy does not go borderless.** Measured on 3.9.3 / iOS 18.7 with a valid
+manifest, `"display": "standalone"`, and PNG icons at 192/512 served: it still
+reports `display-mode: browser` with ~210px of chrome. There is no page-side
+lever either — iPhone WKWebView has no Fullscreen API. The manifest is worth
+keeping correct for desktop install and for the home-screen icon, but full
+screen on the phone is not currently achievable.
+
+Instead the app runs **focus mode**: while a ride is in progress the header and
+the workout panels are hidden, so the instrument fills whatever viewport Bluefy
+leaves. The ☰ button in the corner brings them back without ending the ride.
 
 To get an *unpushed* change onto the phone, tunnel the local server:
 
