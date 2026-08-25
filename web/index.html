@@ -124,13 +124,6 @@
 
     <div class="picker">
       <select id="workoutPicker" aria-label="Choose a workout"></select>
-      <div class="picker-name">
-        <input id="workoutName" type="text" maxlength="60" spellcheck="false"
-               autocomplete="off" placeholder="Name this workout"
-               aria-label="Workout name">
-        <button class="btn btn-save" id="saveWorkout" type="button">Save</button>
-        <button class="btn btn-danger btn-del" id="deleteWorkout" type="button" hidden>Delete</button>
-      </div>
       <p class="picker-note" id="pickerNote"></p>
     </div>
 
@@ -142,6 +135,18 @@
 
     <div class="config-foot">
       <span class="summary" id="planSummary"></span>
+      <span class="saved-state" id="savedState"></span>
+    </div>
+
+    <div class="workout-admin">
+      <div class="admin-row">
+        <input id="workoutName" type="text" maxlength="60" spellcheck="false"
+               autocomplete="off" placeholder="Workout name" aria-label="Workout name">
+        <button class="btn btn-rename" id="renameWorkout" type="button" disabled>Rename</button>
+      </div>
+      <button class="btn btn-danger btn-delete" id="deleteWorkout" type="button">
+        Delete workout
+      </button>
     </div>
 
     <p class="error" id="configError" hidden></p>

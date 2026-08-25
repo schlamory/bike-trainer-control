@@ -36,8 +36,8 @@ const el = {
   profile: $('profile'), profileTotal: $('profileTotal'),
   startBtn: $('startBtn'), pauseBtn: $('pauseBtn'), stopBtn: $('stopBtn'),
   workoutPicker: $('workoutPicker'), workoutName: $('workoutName'),
-  saveWorkout: $('saveWorkout'), deleteWorkout: $('deleteWorkout'),
-  pickerNote: $('pickerNote'),
+  renameWorkout: $('renameWorkout'), deleteWorkout: $('deleteWorkout'),
+  pickerNote: $('pickerNote'), savedState: $('savedState'),
   sets: $('sets'), addSet: $('addSet'), ftpInput: $('ftpInput'),
   planSummary: $('planSummary'), configError: $('configError'),
   configPanel: $('configPanel'), log: $('log'),
@@ -119,16 +119,16 @@ function renderPicker() {
   const { saved, presets } = Workouts.list();
   el.workoutPicker.replaceChildren();
 
-  const opt = (w, label) => {
+  const opt = (w) => {
     const o = document.createElement('option');
     o.value = w.slug;
-    o.textContent = label ?? w.name;
+    o.textContent = w.name;
     return o;
   };
 
   if (saved.length) {
     const g = document.createElement('optgroup');
-    g.label = 'Saved';
+    g.label = 'Yours';
     saved.forEach((w) => g.append(opt(w)));
     el.workoutPicker.append(g);
   }
@@ -138,24 +138,87 @@ function renderPicker() {
     presets.forEach((w) => g.append(opt(w)));
     el.workoutPicker.append(g);
   }
-
-  const unsaved = document.createElement('option');
-  unsaved.value = '';
-  unsaved.textContent = ui.slug ? 'Unsaved changes' : 'Unsaved workout';
-  el.workoutPicker.append(unsaved);
+  el.workoutPicker.value = ui.slug ?? '';
 
   const current = Workouts.get(ui.slug);
-  const clean = Workouts.matches(current, ui.sets);
-  el.workoutPicker.value = clean ? ui.slug : '';
-  el.deleteWorkout.hidden = !(current?.saved && clean);
+  // Whether a built-in exists at this slug, not whether a copy has been made:
+  // deleting a shadowing copy reverts to the built-in either way.
+  const hasBuiltIn = Workouts.PRESETS.some((p) => p.slug === ui.slug);
 
-  if (ui.slug && !clean) {
-    note(`Edited from “${current?.name ?? ui.slug}”. Save to keep the changes.`);
-  } else if (current && !current.saved) {
-    note('Built-in workout. Saving makes an editable copy.');
-  } else {
-    note('');
+  el.deleteWorkout.textContent = hasBuiltIn ? 'Reset to built-in' : 'Delete workout';
+  el.deleteWorkout.disabled = hasBuiltIn && !current?.saved;   // nothing to undo yet
+
+  note(hasBuiltIn && !current?.saved
+    ? 'Built in. Your edits are kept as a copy; reset restores the original.'
+    : '');
+  syncRenameButton();
+}
+
+function syncRenameButton() {
+  const typed = el.workoutName.value.trim();
+  el.renameWorkout.disabled = !typed || typed === ui.name;
+}
+
+// --- auto-save ------------------------------------------------------------
+// Edits persist on their own; there is no save gesture. Debounced so holding a
+// number spinner does not write on every keystroke.
+let saveTimer = null;
+
+function autoSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    if (!ui.name) return;
+    // Only write when something actually differs from what is already stored
+    // under this slug. Keeps loading a workout from counting as an edit.
+    if (Workouts.matches(Workouts.get(ui.slug), ui.sets)) return;
+    const stored = Workouts.save({ name: ui.name, sets: ui.sets, slug: ui.slug });
+    if (!stored) {
+      el.savedState.textContent = 'Not saved — browser storage unavailable';
+      el.savedState.dataset.on = '';
+      return;
+    }
+    ui.slug = stored.slug;
+    el.savedState.textContent = 'Saved';
+    el.savedState.dataset.on = '1';
+    setTimeout(() => {
+      if (el.savedState.textContent === 'Saved') el.savedState.dataset.on = '';
+    }, 1200);
+    renderPicker();
+  }, 500);
+}
+
+function renameWorkout() {
+  const typed = el.workoutName.value.trim();
+  if (!typed || typed === ui.name) return;
+  const newSlug = Workouts.slugify(typed);
+  const clash = newSlug !== ui.slug && Workouts.get(newSlug)?.saved;
+  if (clash) {
+    note(`You already have a workout called “${Workouts.get(newSlug).name}”.`);
+    return;
   }
+  const previous = ui.slug;
+  const stored = Workouts.save({ name: typed, sets: ui.sets });
+  if (!stored) { note('Could not rename — browser storage is unavailable.'); return; }
+  if (previous && previous !== stored.slug) Workouts.remove(previous);
+  ui.slug = stored.slug;
+  ui.name = stored.name;
+  el.workoutName.value = stored.name;
+  setRoute(stored.slug);
+  save();
+  renderPicker();
+  note(`Renamed to “${stored.name}”.`, 'good');
+}
+
+function deleteWorkout() {
+  const slug = ui.slug;
+  const wasNamed = ui.name;
+  Workouts.remove(slug);
+  // get() falls through to a built-in of the same slug, if there is one.
+  const fallback = Workouts.get(slug) ?? Workouts.normalise(Workouts.PRESETS[0]);
+  applyWorkout(fallback);
+  note(fallback.slug === slug
+    ? `Reset “${wasNamed}” to the built-in version.`
+    : `Deleted “${wasNamed}”.`);
 }
 
 function note(text, level = '') {
@@ -165,13 +228,16 @@ function note(text, level = '') {
 
 function applyWorkout(w, { push = true } = {}) {
   if (!w) return false;
+  clearTimeout(saveTimer);   // switching is not an edit
   ui.sets = w.sets.map((s) => ({ repeat: s.repeat, intervals: s.intervals.map((i) => ({ ...i })) }));
   ui.slug = w.slug;
   ui.name = w.name;
   el.workoutName.value = ui.name;
   renderSets();
   rebuildPlan();
+  clearTimeout(saveTimer);
   setRoute(w.slug, { replace: !push });
+  syncRenameButton();
   return true;
 }
 
@@ -385,6 +451,7 @@ function rebuildPlan() {
     if (!session?.running) renderIdle();
     setTransport();
     save();
+    autoSave();
     renderPicker();
     return true;
   } catch (err) {
@@ -597,35 +664,13 @@ el.workoutPicker.addEventListener('change', () => {
   applyWorkout(Workouts.get(slug));
 });
 
-el.saveWorkout.addEventListener('click', () => {
-  const name = el.workoutName.value.trim();
-  if (!name) {
-    note('Give the workout a name first.', '');
-    el.workoutName.focus();
-    return;
-  }
-  const saved = Workouts.save({ name, sets: ui.sets });
-  if (!saved) { note('Could not save — browser storage is unavailable.'); return; }
-  ui.slug = saved.slug;
-  ui.name = saved.name;
-  setRoute(saved.slug);
-  save();
-  renderPicker();
-  note(`Saved “${saved.name}”.`, 'good');
-});
+el.renameWorkout.addEventListener('click', renameWorkout);
+el.deleteWorkout.addEventListener('click', () => { if (!session?.running) deleteWorkout(); });
 
-el.deleteWorkout.addEventListener('click', () => {
-  if (!ui.slug) return;
-  const gone = ui.name;
-  Workouts.remove(ui.slug);
-  ui.slug = null;
-  setRoute(null);
-  save();
-  renderPicker();
-  note(`Deleted “${gone}”. The intervals are still loaded.`);
+el.workoutName.addEventListener('input', syncRenameButton);
+el.workoutName.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); renameWorkout(); }
 });
-
-el.workoutName.addEventListener('input', () => { ui.name = el.workoutName.value; save(); });
 
 window.addEventListener('popstate', () => {
   if (session?.running) return;

@@ -113,8 +113,13 @@ export function get(slug) {
   return preset ? normalise(preset) : null;
 }
 
-export function save({ name, sets }) {
-  const slug = slugify(name);
+/**
+ * `slug` is optional: pass it to write in place (auto-save keeps a workout at
+ * its existing slug, including a preset's hand-written one), omit it to derive
+ * a fresh slug from the name (which is what renaming does).
+ */
+export function save({ name, sets, slug: explicit }) {
+  const slug = explicit || slugify(name);
   const map = readAll();
   map[slug] = {
     slug,

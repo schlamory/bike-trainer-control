@@ -397,9 +397,18 @@ main {
 }
 .picker select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-.picker-name { display: flex; gap: 0.4rem; }
+.workout-admin {
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
 
-.picker-name input {
+.admin-row { display: flex; gap: 0.4rem; }
+
+.admin-row input {
   flex: 1 1 auto;
   min-width: 0;
   font-family: var(--font-ui);
@@ -411,9 +420,13 @@ main {
   padding: 0.6rem 0.7rem;
   min-height: 44px;
 }
-.picker-name input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.admin-row input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
 
-.btn-save, .btn-del { flex: none; min-height: 44px; padding: 0.6rem 1rem; font-size: 0.85rem; }
+.btn-rename { flex: none; min-height: 44px; padding: 0.6rem 1rem; font-size: 0.85rem; }
+.btn-delete { min-height: 44px; font-size: 0.85rem; }
+
+.saved-state { font-size: 0.72rem; color: var(--faint); }
+.saved-state[data-on='1'] { color: var(--z2); }
 
 .picker-note { margin: 0; font-size: 0.75rem; color: var(--faint); min-height: 1.1em; }
 .picker-note[data-level='good'] { color: var(--z2); }

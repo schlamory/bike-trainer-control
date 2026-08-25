@@ -84,9 +84,13 @@ seven times. Sets play in order, so warm-up / main / cool-down reads top to
 bottom the way the ride happens.
 
 Four presets ship in `web/core/workouts.js` (`sprints`, `vo2-30-30`,
-`threshold-2x10`, `recovery`), sized around a 250 W FTP. Editing one and
-pressing Save stores an editable copy under its own slug; saved workouts shadow
-a preset of the same name and appear above them in the picker.
+`threshold-2x10`, `recovery`), sized around a 250 W FTP.
+
+Edits save themselves — there is no save gesture. Editing a built-in stores a
+copy at the same slug, which shadows it, so **Delete becomes "Reset to
+built-in"** for presets and puts the original back. Rename and delete sit at
+the bottom of the workout panel; renaming moves the workout to a new slug and
+updates the URL.
 
 Saved workouts live in `localStorage` — chosen over `sessionStorage`, which is
 wiped when the tab closes. That makes them per-browser convenience rather than
