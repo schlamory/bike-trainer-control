@@ -1,53 +1,87 @@
 # bike-trainer-control
 
-Tools for driving a Saris H3 over BLE FTMS.
+Structured ERG workouts on a Saris H3, over BLE FTMS.
 
-**Live app: https://schlamory.github.io/bike-trainer-control/**
+**Live app: <https://schlamory.github.io/bike-trainer-control/>**
 
-Open it in Chrome or Edge on the desktop, or Bluefy on iOS. Safari has no Web
-Bluetooth and never will. Deploys automatically on any push to `main` that
-touches `web/`.
+Chrome or Edge on the desktop, Bluefy on iOS. Safari has no Web Bluetooth and
+never will — that is why Bluefy exists. Pushes to `main` that touch `web/`
+redeploy automatically.
 
-- `saris-h3-workout-runner.md` — the original build orientation doc.
-- `FEEDBACK.md` — running notes: next steps, open questions, decision log.
-  Start here for what to do next.
-- `FINDINGS.md` — what the hardware actually does, measured. **Read this second;
-  it corrects the handshake order and the feature-bit table in the doc above.**
-- `bike_trainer/ftms.py` — FTMS protocol constants and decoders. Pure functions
-  over bytes, no I/O.
-- `bike_trainer/cps.py` — Cycling Power Service decoder (torque, wheel/crank
-  revolutions, accumulated energy).
-- `bike_trainer/control.py` — the ERG control loop: handshake, confirm-and-retry
-  on every target, keepalive rewrites, disconnect detection.
-- `workout.py` — run a structured interval workout, log per-second CSV.
-- `scan.py` — find FTMS advertisers.
-- `probe.py` — connect, dump the GATT tree, read capabilities, test the handshake.
-- `telemetry.py` — measure what the trainer pushes and how fast.
-- `experiments/` — the scripts backing each claim in FINDINGS.md.
+The app talks to the trainer directly from the browser: no daemon, no server in
+the data path. The Python tools alongside it are a hardware lab, not a
+dependency.
 
-## Web app
+---
 
-A PWA that drives the trainer directly over Web Bluetooth — no daemon, no
-server in the data path. Runs in Chrome or Edge on the desktop today; the same
-code is what would run on an iPhone under Bluefy, once the indication question
-in FINDINGS.md is answered.
+## Using it
+
+Open the live app, press **Connect trainer**, pick the Hammer, press **Start
+ride**. Or run it locally:
 
 ```sh
-uv run serve.py            # http://localhost:8756, opens a browser
+uv sync
+uv run serve.py        # http://localhost:8756
 ```
 
-Press **Connect trainer**, pick the Hammer, then **Start ride**. Workout syntax
-matches `workout.py`: `75w/60s, 230w/20s` with a total time, and the pattern
-repeats to fill it.
+Only one BLE connection to the trainer can exist at a time — quit Zwift, the
+Saris app, and any Python tool from this repo before connecting.
 
-### Architecture
+### Workouts
+
+A workout is an ordered list of **sets**, each `{intervals, repeat}`. A warm-up
+is a one-interval set played once; a main block is a two-interval set played
+seven times. Sets play in order, so warm-up / main / cool-down reads top to
+bottom the way the ride happens.
+
+Intervals are entered as watts and seconds. Edits **save themselves** — there is
+no save gesture. Rename and delete are at the bottom of the workout panel.
+
+Named workouts live at `/workout/<slug>`, so a ride can be bookmarked or wired
+to an iOS Shortcut:
+
+```
+https://schlamory.github.io/bike-trainer-control/workout/sprints
+https://schlamory.github.io/bike-trainer-control/workout/threshold-2x10
+```
+
+Four presets ship in `web/core/workouts.js` — `sprints`, `vo2-30-30`,
+`threshold-2x10`, `recovery` — sized around a 250 W FTP. Editing a built-in
+stores a copy at the same slug which shadows it, so **Delete becomes "Reset to
+built-in"** and puts the original back.
+
+Saved workouts live in `localStorage`, chosen over `sessionStorage` because that
+is wiped when the tab closes. They are per-browser convenience, not durable
+storage: clearing site data loses them, while presets are code and always
+return.
+
+FTP lives under Settings, not with the workout. It only colours intervals by
+power zone and is never sent to the trainer.
+
+### During and after a ride
+
+The control loop ticks at 1 Hz, rewrites the current target every 10 s as a
+keepalive, and confirms every target change two ways — the control-point
+response *and* the `0x2ADA` status echo of the exact wattage — retrying up to
+four times if either is missing. That is the workaround for the H3's
+occasional refusal to change target.
+
+When a ride ends, by finishing or by **End ride**, the trainer is set to the
+lowest wattage the workout contained rather than left holding the last
+interval. Finishing on a hard effort would otherwise leave full resistance on
+for the spin-down. It stays in ERG at that easy target instead of stopping, so
+resistance stays predictable while you keep pedalling.
+
+---
+
+## Architecture
 
 Two seams, so the core knows about neither the browser nor the trainer:
 
 ```
   app.js            UI only: renders session events, turns clicks into intent
       │
-  core/             the ride loop and workout model — no DOM, no BLE, no FTMS
+  core/             ride loop and workout model — no DOM, no BLE, no FTMS
       │  ▲ TrainerController          equipment seam
   drivers/          speaks FTMS; knows nothing about the browser
       │  ▲ GattTransport              browser seam
@@ -57,50 +91,22 @@ Two seams, so the core knows about neither the browser nor the trainer:
 | Module | Responsibility |
 | --- | --- |
 | `core/contracts.js` | Both interfaces, as JSDoc types plus a runtime check |
-| `core/workout.js` | Step parsing, plan building, power zones. Pure |
-| `core/session.js` | The ride loop: clock, plan traversal, keepalives. Pure |
+| `core/workout.js` | Plan model: flattening sets, durations, power zones. Pure |
+| `core/workouts.js` | Named workouts: presets, storage, slugs. Pure |
+| `core/session.js` | The ride loop: clock, plan traversal, keepalives, settle |
 | `drivers/ftms.js` | FTMS byte encode/decode. Pure |
 | `drivers/ftms-ble.js` | FTMS over any transport: handshake, confirm-and-retry |
 | `drivers/mock.js` | Simulated trainer at the controller seam |
 | `transport/web-bluetooth.js` | `GattTransport` over Web Bluetooth |
 | `transport/mock-gatt.js` | Simulated trainer at the byte level |
 
-Swapping either seam is why an ANT+ FE-C bridge or a non-browser host could be
+Swapping either seam is how an ANT+ FE-C bridge or a non-browser host would be
 added without touching the workout logic.
 
-### Named workouts
-
-Workouts live at `/workout/<slug>`, so a ride can be bookmarked or wired to an
-iOS Shortcut:
-
-```
-https://schlamory.github.io/bike-trainer-control/workout/sprints
-https://schlamory.github.io/bike-trainer-control/workout/vo2-30-30
-```
-
-A workout is an ordered list of **sets**, each `{intervals, repeat}`. A warm-up
-is a one-interval set played once; a main block is a two-interval set played
-seven times. Sets play in order, so warm-up / main / cool-down reads top to
-bottom the way the ride happens.
-
-Four presets ship in `web/core/workouts.js` (`sprints`, `vo2-30-30`,
-`threshold-2x10`, `recovery`), sized around a 250 W FTP.
-
-Edits save themselves — there is no save gesture. Editing a built-in stores a
-copy at the same slug, which shadows it, so **Delete becomes "Reset to
-built-in"** for presets and puts the original back. Rename and delete sit at
-the bottom of the workout panel; renaming moves the workout to a new slug and
-updates the URL.
-
-Saved workouts live in `localStorage` — chosen over `sessionStorage`, which is
-wiped when the tab closes. That makes them per-browser convenience rather than
-durable storage: clearing site data loses them, while the presets are code and
-always come back.
-
-GitHub Pages has no server-side routing, so `404.html` bounces `/workout/<name>`
-to the app, which restores the pretty URL. `serve.py` does the same locally
-rather than serving `index.html` in place — that shortcut would break every
-relative asset, since they would resolve against `/workout/`.
+`/workout/<slug>` needs no server: `404.html` bounces the request to the app,
+which restores the pretty URL. `serve.py` does the same locally rather than
+serving `index.html` in place — that shortcut breaks every relative asset,
+since they would resolve against `/workout/`.
 
 ### Running without hardware
 
@@ -110,27 +116,23 @@ http://localhost:8756/?mock=gatt             real FTMS driver over a fake radio
 http://localhost:8756/?mock=gatt&stick=0.4   40% of targets stick, exercising retry
 ```
 
-`?mock=gatt` is the useful one for correctness: it runs the actual driver —
-handshake, response parsing, confirm-and-retry — against a byte-level emulation
-of the H3, including its quirk that Reset revokes control. It is how the retry
-path was first proven to work, since the real ERG-stick bug never reproduced.
+`?mock=gatt` is the one that matters for correctness: it runs the actual driver
+— handshake, response parsing, confirm-and-retry — against a byte-level
+emulation of the H3, quirks included. It is how the retry path was first proven
+to work, since the real ERG-stick bug never reproduced on hardware.
 
 `window.hammer` exposes `trainer`, `session` and `ui` in the console.
 
-Web Bluetooth needs a secure context, which `localhost` satisfies — no TLS
-setup required. Only one BLE connection to the trainer can exist at a time, so
-quit the Python tools before connecting the browser.
-
 ### On the phone
 
-Just open <https://schlamory.github.io/bike-trainer-control/> in Bluefy and
-bookmark it. iOS needs Bluefy or BLE Link — Safari has no Web Bluetooth.
+Open the live URL in Bluefy and bookmark it, or point an iOS Shortcut at a
+`/workout/<slug>` address.
 
-`web/diagnostics.html` reports what a given browser can actually do, and is
-worth re-running after any Bluefy update:
+`diagnostics.html` reports what a given browser can actually do, and is worth
+re-running after any Bluefy update:
 <https://schlamory.github.io/bike-trainer-control/diagnostics.html>
 
-To test an unpushed change on the phone, tunnel the local server instead:
+To get an *unpushed* change onto the phone, tunnel the local server:
 
 ```sh
 uv run serve.py --no-open                          # terminal 1
@@ -138,27 +140,48 @@ cloudflared tunnel --url http://localhost:8756     # terminal 2, prints an HTTPS
 ```
 
 The tunnel URL rotates on restart and the page is public while it runs, so it
-is for testing only — Pages is the address to bookmark.
+is for testing only. Pages is the address to bookmark.
 
-## Usage
+---
+
+## Hardware toolkit
+
+Python tools for interrogating the trainer directly, independent of the app.
+
+| Script | What it does |
+| --- | --- |
+| `scan.py` | Find FTMS advertisers |
+| `probe.py` | Dump the GATT tree, read capabilities, test the handshake |
+| `telemetry.py` | Measure what the trainer pushes, and how fast |
+| `workout.py` | Run a structured workout, logging per-second CSV |
+| `experiments/` | The scripts backing each claim in `FINDINGS.md` |
 
 ```sh
-uv sync
-uv run scan.py                 # find the trainer
-uv run probe.py                # full capability dump -> probe-report.json
-uv run probe.py --no-handshake # read-only, sends nothing
+uv run scan.py                           # find the trainer
+uv run probe.py                          # capability dump -> probe-report.json
+uv run probe.py --no-handshake           # read-only, sends nothing
+uv run telemetry.py -d 30                # notification rates for both power streams
 
-# structured workouts -- pattern repeats until --duration, last step truncated
 uv run workout.py --steps "75w/60s, 230w/20s" --duration 10m
 uv run workout.py --steps "100w/5m, 250w/1m" --duration 30m --log ride.csv
-uv run workout.py --steps "75w/60s, 230w/20s" --once
-
-uv run telemetry.py -d 30      # notification rates for both power streams
 
 uv run experiments/decoder_selftest.py   # no hardware needed
 uv run experiments/handshake_order.py    # why Reset breaks the handshake
 uv run experiments/erg_targets.py        # ERG acceptance + status confirmations
 ```
 
-The trainer accepts exactly one BLE connection — quit Zwift, the Saris app and
-anything else holding it before running these.
+`bike_trainer/` holds the protocol behind these: `ftms.py` and `cps.py` are pure
+decoders over bytes, `control.py` is the ERG loop.
+
+---
+
+## Documents
+
+- **`FINDINGS.md`** — what the hardware actually does, measured. Corrects the
+  handshake order and the feature-bit table in the orientation doc, and records
+  what Bluefy can do.
+- **`FEEDBACK.md`** — running notes: next steps, open questions, decision log.
+  Start here for what to do next.
+- `saris-h3-workout-runner.md` — the original build orientation doc, kept as
+  written. Read `FINDINGS.md` alongside it.
+- `data/` — the ride log backing the ERG accuracy numbers in `FINDINGS.md`.

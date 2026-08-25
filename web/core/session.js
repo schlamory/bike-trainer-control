@@ -71,6 +71,11 @@ export class RideSession extends Emitter {
     this.log('Resumed.');
   }
 
+  /** The easiest wattage the workout asked for -- where the ride settles. */
+  get floorWatts() {
+    return this.plan.length ? Math.min(...this.plan.map((s) => s.watts)) : null;
+  }
+
   /** Ends the ride. `reason` appears in the log; 'finished' fires either way. */
   stop(reason = 'Ride ended.', level = 'info') {
     if (!this.running) return;
@@ -81,6 +86,26 @@ export class RideSession extends Emitter {
     this.emit('state', { running: false, paused: false });
     this.log(reason, level);
     this.emit('finished', { elapsed: this.elapsed });
+    this._settle();
+  }
+
+  /**
+   * Drop to the workout's easiest wattage rather than leaving the trainer
+   * holding whatever the last interval asked for -- finishing on a hard effort
+   * would otherwise leave full resistance on for the spin-down.
+   *
+   * Deliberately not an FTMS Stop: staying in ERG at a low target keeps the
+   * resistance predictable while you keep pedalling.
+   */
+  async _settle() {
+    const floor = this.floorWatts;
+    if (floor === null || !this.controller.connected) return;
+    try {
+      await this.controller.setPower(floor);
+      this.log(`Trainer left at ${floor} W.`);
+    } catch (err) {
+      this.log(`Could not set the trainer down to ${floor} W: ${err.message}`, 'warn');
+    }
   }
 
   _tick() {
